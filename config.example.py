@@ -1,0 +1,2 @@
+EXCHANGE_USERNAME = "username"
+EXCHANGE_PASSWORD = "password"
