@@ -1,33 +1,31 @@
 import config
-import requests
 
-from requests.auth import HTTPBasicAuth
+from exchangelib import Credentials, Account, Configuration, FileAttachment
 
-url = "https://autodiscover.hierinloggen.nl/ews/exchange.asmx"
 
-headers = {'content-type': 'text/xml'}
-body = """<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
-xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
-    <soap:Header>
-        <t:RequestServerVersion Version="Exchange2007_SP1" />
-    </soap:Header>
-    <soap:Body>
-        <FindItem xmlns="http://schemas.microsoft.com/exchange/services/2006/messages"
-               xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"
-              Traversal="Shallow">
-            <ItemShape>
-                <t:BaseShape>IdOnly</t:BaseShape>
-            </ItemShape>
-            <ParentFolderIds>
-                <t:DistinguishedFolderId Id="inbox"/>
-            </ParentFolderIds>
-        </FindItem>
-    </soap:Body>
-</soap:Envelope>"""
+# Process individual message
+def process_message(account, message):
+    for attachment in message.attachments:
+        if isinstance(attachment, FileAttachment):
+            print('Found attachment with name {}'.format(attachment.name))
 
-response = requests.post(url, data=body, headers=headers,
-                         auth=HTTPBasicAuth(config.EXCHANGE_USERNAME,
-                                            config.EXCHANGE_PASSWORD))
 
-print(response.content)
+# Initialize exchangelib account
+def main():
+    acc_credentials = Credentials(username=config.EXCHANGE_USERNAME,
+                                  password=config.EXCHANGE_PASSWORD)
+    acc_config = Configuration(
+        service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
+        auth_type='basic')
+    account = Account(primary_smtp_address=config.EXCHANGE_USERNAME,
+                      config=acc_config, autodiscover=False,
+                      access_type='delegate')
+
+    if account.inbox.unread_count > 0:
+        for message in account.inbox.filter(is_read=False).order_by(
+                '-datetime_received')[:100]:
+            process_message(account=account, message=message)
+
+
+if __name__ == '__main__':
+    main()
