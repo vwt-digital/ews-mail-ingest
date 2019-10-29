@@ -76,7 +76,7 @@ def main():
 
     if account.inbox.unread_count > 0:
         for message in account.inbox.filter(is_read=False).order_by(
-                '-datetime_received')[:100]:
+                '-datetime_received'):
             process_message(account=account, bucket=bucket, message=message)
 
 
