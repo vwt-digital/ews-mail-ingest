@@ -1,18 +1,17 @@
 import config
-import os
 import datetime
-import threading
 import logging
 import string
 
+from exchangelib import Credentials, Account, Configuration, Folder, \
+    FileAttachment, errors
 from google.cloud import storage
-from exchangelib import Credentials, Account, Configuration, FileAttachment
 
 
 # Process individual message
 def process_message(account, bucket, message):
     logging.info('Started uploading of e-mail')
-    
+
     now = datetime.datetime.date(message.datetime_sent)
     destination_path = '%04d/%02d/%02d/%s' % (now.year, now.month, now.day,
                                               format_filename(message.id))
@@ -38,6 +37,16 @@ def process_message(account, bucket, message):
                 logging.info("Finished upload of attachment '{}'".format(
                     attachment.name))
 
+    # Mark e-mail as 'read' and move to 'processed' folder
+    try:
+        message.is_read = True
+        message.save(update_fields=['is_read'])
+
+        to_folder = account.inbox / config.EXCHANGE_FOLDER_NAME
+        message.move(to_folder)
+    finally:
+        logging.info('Finished moving of e-mail')
+
     logging.info('Finished uploading of e-mail')
 
 
@@ -53,6 +62,14 @@ def main():
                       config=acc_config, autodiscover=False,
                       access_type='delegate')
 
+    # Create sub folder for processed e-mails
+    try:
+        processed_folder = Folder(parent=account.inbox,
+                                  name=config.EXCHANGE_FOLDER_NAME)
+        processed_folder.save()
+    except errors.ErrorFolderExists:
+        pass
+
     # Initialise GCP bucket
     client = storage.Client()
     bucket = client.get_bucket(config.GCP_BUCKET_NAME)
@@ -66,7 +83,7 @@ def main():
 def format_filename(s):
     valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
     filename = ''.join(c for c in s if c in valid_chars)
-    filename = filename.replace(' ', '_') 
+    filename = filename.replace(' ', '_')
     return filename
 
 
