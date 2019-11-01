@@ -1,45 +1,51 @@
 import config
 import os
-import datetime
 import logging
-import string
+import json
 import base64
+import random
 
 from exchangelib import Credentials, Account, Configuration, Folder, \
     FileAttachment, errors
-from google.cloud import kms_v1, storage
+from google.cloud import kms_v1, storage, pubsub_v1
 
 
-# Process individual message
-def process_message(account, bucket, message):
-    logging.info('Started uploading of e-mail')
-
-    now = datetime.datetime.date(message.datetime_sent)
-    destination_path = '%04d/%02d/%02d/%s' % (now.year, now.month, now.day,
-                                              format_filename(message.id))
-
-    # Write original e-mail message to GCS storage
+# Upload original e-mail message to GCS storage
+def process_message_original(bucket, message, path):
     try:
         message_text_blob = bucket.blob('%s/original_email.html' % (
-            destination_path))
+            path))
         message_text_blob.upload_from_string(message.unique_body)
     finally:
         logging.info("Finished upload of original e-mail content")
 
-    # Write attachments to GCS storage
+
+# Upload attachments to GCS storage
+def process_message_attachments(bucket, message, path):
+    message_attachments = []
     for attachment in message.attachments:
         if isinstance(attachment, FileAttachment):
             try:
-                path = '%s/%s' % (destination_path, attachment.name)
+                file_path = '%s/%s' % (path, attachment.name)
 
-                blob = bucket.blob(path)
+                blob = bucket.blob(file_path)
                 blob.upload_from_string(attachment.content,
                                         content_type=attachment.content_type)
+
+                message_attachments.append({
+                    'name': attachment.name,
+                    'path': f'gs://{config.GCP_BUCKET_NAME}/{file_path}',
+                    'content_type': attachment.content_type,
+                })
             finally:
                 logging.info("Finished upload of attachment '{}'".format(
                     attachment.name))
 
-    # Mark e-mail as 'read' and move to 'processed' folder
+    return message_attachments
+
+
+# Mark e-mail as 'read' and move to specified Inbox folder
+def process_message_status(account, message):
     try:
         message.is_read = True
         message.save(update_fields=['is_read'])
@@ -49,17 +55,37 @@ def process_message(account, bucket, message):
     finally:
         logging.info('Finished moving of e-mail')
 
-    logging.info('Finished uploading of e-mail')
+
+# Post message meta info to Pub/Sub topic
+def process_message_meta(message, attachments, path, bucket,
+                         publisher, topic_name):
+    try:
+        message_meta = {
+            'message_id': message.id,
+            'sender': message.sender.email_address,
+            'subject': message.subject,
+            'datetime_sent': message.datetime_sent.strftime(
+                "%Y-%m-%dT%H:%M:%S.%fZ"),
+            'datetime_received': message.datetime_received.strftime(
+                "%Y-%m-%dT%H:%M:%S.%fZ"),
+            'attachments': attachments
+        }
+
+        # Save meta file to bucket
+        blob = bucket.blob('{}/metadata.json'.format(path))
+        blob.upload_from_string(json.dumps(message_meta),
+                                content_type='application/json')
+
+        # Publish message to topic
+        publisher.publish(topic_name,
+                          bytes(json.dumps(message_meta).encode('utf-8')))
+    finally:
+        logging.info('Finished posting of e-mail meta to Pub/Sub')
 
 
-def format_filename(s):
-    valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
-    filename = ''.join(c for c in s if c in valid_chars)
-    filename = filename.replace(' ', '_')
-    return filename
-
-
-def get_password_credentials():
+# Setup Exchange account and add sub-folder if not existing
+def initialize_exchange_account():
+    # Decode KMS encrypted password
     exchange_password_encrypted = base64.b64decode(
         os.environ['EXCHANGE_PASSWORD_ENCRYPTED'])
     kms_client = kms_v1.KeyManagementServiceClient()
@@ -70,13 +96,6 @@ def get_password_credentials():
         crypto_key_name, exchange_password_encrypted)
     exchange_password = decrypt_response.plaintext \
         .decode("utf-8").replace('\n', '')
-    return exchange_password
-
-
-# Initialize Exchange account
-def ews_to_bucket():
-    # Decrypt Exchange password trough KMS
-    exchange_password = get_password_credentials()
 
     # Initialize connection to Exchange Web Services
     acc_credentials = Credentials(username=config.EXCHANGE_USERNAME,
@@ -96,11 +115,67 @@ def ews_to_bucket():
     except errors.ErrorFolderExists:
         pass
 
-    # Initialise GCP bucket
-    client = storage.Client()
-    bucket = client.get_bucket(config.GCP_BUCKET_NAME)
+    return account
+
+
+# Set message path for GCP bucket
+def set_message_path(client, bucket, message):
+    now = message.datetime_sent
+    message_id = '%04d%02d%02dT%02d%02d%02dZ' % (now.year, now.month, now.day,
+                                                 now.hour, now.minute,
+                                                 now.second)
+    path = '%s/%04d/%02d/%02d/%s' % (config.EXCHANGE_USERNAME, now.year,
+                                     now.month, now.day, message_id)
+
+    if check_gcs_blob_exists(f"{path}/original_email.html", client, bucket):
+        path = '{}_{}'.format(path, random.randrange(10))
+
+    return path
+
+
+# Check if blob already exists
+def check_gcs_blob_exists(filename, client, bucket):
+    return storage.Blob(bucket=bucket, name=filename).exists(client)
+
+
+def ews_to_bucket():
+    # Initialize Exchange account
+    account = initialize_exchange_account()
 
     if account.inbox.unread_count > 0:
-        for message in account.inbox.filter(is_read=False).order_by(
-                '-datetime_received'):
-            process_message(account=account, bucket=bucket, message=message)
+        # Initialise GCP bucket
+        client = storage.Client()
+        bucket = client.get_bucket(config.GCP_BUCKET_NAME)
+
+        # Initialise Pub/Sub topic
+        publisher = pubsub_v1.PublisherClient()
+        topic_name = 'projects/{project_id}/topics/{topic}'.format(
+            project_id=config.TOPIC_PROJECT_ID, topic=config.TOPIC_NAME)
+
+        for message in account.inbox.filter(
+                is_read=False).order_by('-datetime_received'):
+            logging.info('Started processing of e-mail')
+
+            # Set message path
+            path = set_message_path(client=client, bucket=bucket,
+                                    message=message)
+
+            # Save original message to bucket
+            process_message_original(bucket=bucket, message=message,
+                                     path=path)
+
+            # Save message attachments to bucket
+            message_attachments = process_message_attachments(bucket=bucket,
+                                                              message=message,
+                                                              path=path)
+
+            # Mark message as 'read' and move to folder
+            # process_message_status(account=account, message=message)
+
+            # Post message meta info to Pub/Sub Topic
+            process_message_meta(message=message,
+                                 attachments=message_attachments, path=path,
+                                 bucket=bucket, publisher=publisher,
+                                 topic_name=topic_name)
+
+            logging.info('Finished processing of e-mail')
