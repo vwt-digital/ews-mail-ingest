@@ -1,11 +1,13 @@
 import config
+import os
 import datetime
 import logging
 import string
+import base64
 
 from exchangelib import Credentials, Account, Configuration, Folder, \
     FileAttachment, errors
-from google.cloud import storage
+from google.cloud import kms_v1, storage
 
 
 # Process individual message
@@ -50,11 +52,35 @@ def process_message(account, bucket, message):
     logging.info('Finished uploading of e-mail')
 
 
-# Initialize exchangelib account
-def main():
+def format_filename(s):
+    valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
+    filename = ''.join(c for c in s if c in valid_chars)
+    filename = filename.replace(' ', '_')
+    return filename
+
+
+def get_password_credentials():
+    exchange_password_encrypted = base64.b64decode(
+        os.environ['EXCHANGE_PASSWORD_ENCRYPTED'])
+    kms_client = kms_v1.KeyManagementServiceClient()
+    crypto_key_name = kms_client.crypto_key_path_path(
+        os.environ['PROJECT_ID'], 'europe',
+        'ews-api', 'ews-api-credentials')
+    decrypt_response = kms_client.decrypt(
+        crypto_key_name, exchange_password_encrypted)
+    exchange_password = decrypt_response.plaintext \
+        .decode("utf-8").replace('\n', '')
+    return exchange_password
+
+
+# Initialize Exchange account
+def ews_to_bucket():
+    # Decrypt Exchange password trough KMS
+    exchange_password = get_password_credentials()
+
     # Initialize connection to Exchange Web Services
     acc_credentials = Credentials(username=config.EXCHANGE_USERNAME,
-                                  password=config.EXCHANGE_PASSWORD)
+                                  password=exchange_password)
     acc_config = Configuration(
         service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
         auth_type='basic')
@@ -78,14 +104,3 @@ def main():
         for message in account.inbox.filter(is_read=False).order_by(
                 '-datetime_received'):
             process_message(account=account, bucket=bucket, message=message)
-
-
-def format_filename(s):
-    valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
-    filename = ''.join(c for c in s if c in valid_chars)
-    filename = filename.replace(' ', '_')
-    return filename
-
-
-if __name__ == '__main__':
-    main()
