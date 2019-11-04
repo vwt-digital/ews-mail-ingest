@@ -151,44 +151,46 @@ def check_gcs_blob_exists(filename, client, bucket):
     return storage.Blob(bucket=bucket, name=filename).exists(client)
 
 
-def ews_to_bucket(body=None):
-    # Initialize Exchange account
-    account = initialize_exchange_account()
+def ews_to_bucket(request):
+    if request.method == 'POST':
+        # Initialize Exchange account
+        account = initialize_exchange_account()
 
-    if account.inbox.unread_count > 0:
-        # Initialise GCP bucket
-        client = storage.Client()
-        bucket = client.get_bucket(config.GCP_BUCKET_NAME)
+        if account.inbox.unread_count > 0:
+            # Initialise GCP bucket
+            client = storage.Client()
+            bucket = client.get_bucket(config.GCP_BUCKET_NAME)
 
-        # Initialise Pub/Sub topic
-        publisher = pubsub_v1.PublisherClient()
-        topic_name = 'projects/{project_id}/topics/{topic}'.format(
-            project_id=config.TOPIC_PROJECT_ID, topic=config.TOPIC_NAME)
+            # Initialise Pub/Sub topic
+            publisher = pubsub_v1.PublisherClient()
+            topic_name = 'projects/{project_id}/topics/{topic}'.format(
+                project_id=config.TOPIC_PROJECT_ID, topic=config.TOPIC_NAME)
 
-        for message in account.inbox.filter(
-                is_read=False).order_by('-datetime_received'):
-            logging.info('Started processing of e-mail')
+            for message in account.inbox.filter(
+                    is_read=False).order_by('-datetime_received'):
+                logging.info('Started processing of e-mail')
 
-            # Set message path
-            path = set_message_path(client=client, bucket=bucket,
-                                    message=message)
+                # Set message path
+                path = set_message_path(client=client, bucket=bucket,
+                                        message=message)
 
-            # Save original message to bucket
-            process_message_original(bucket=bucket, message=message,
-                                     path=path)
+                # Save original message to bucket
+                process_message_original(bucket=bucket, message=message,
+                                         path=path)
 
-            # Save message attachments to bucket
-            message_attachments = process_message_attachments(bucket=bucket,
-                                                              message=message,
-                                                              path=path)
+                # Save message attachments to bucket
+                message_attachments = \
+                    process_message_attachments(bucket=bucket,
+                                                message=message, path=path)
 
-            # Mark message as 'read' and move to folder
-            # process_message_status(account=account, message=message)
+                # Mark message as 'read' and move to folder
+                process_message_status(account=account, message=message)
 
-            # Post message meta info to Pub/Sub Topic
-            process_message_meta(message=message,
-                                 attachments=message_attachments, path=path,
-                                 bucket=bucket, publisher=publisher,
-                                 topic_name=topic_name)
+                # Post message meta info to Pub/Sub Topic
+                process_message_meta(message=message,
+                                     attachments=message_attachments,
+                                     path=path, bucket=bucket,
+                                     publisher=publisher,
+                                     topic_name=topic_name)
 
-            logging.info('Finished processing of e-mail')
+                logging.info('Finished processing of e-mail')
