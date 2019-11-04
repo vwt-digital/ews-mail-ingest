@@ -7,7 +7,7 @@ The ```config.py``` file (see [config.example.py](config/config.example.py) for 
 ## Setup
 1. Make sure a ```config.py``` file exists within the ```/functions``` directory, based on the [config.example.py](config/config.example.py), with the correct configuration:
     ~~~
-    GCP_BUCKET_NAME: The bucket name where the e-mails will be uploaded to
+    GCP_BUCKET_NAME = The bucket name where the e-mails will be uploaded to
     EXCHANGE_URL = The Exchange service endpoint for the mailbox
     EXCHANGE_USERNAME = Username used to login
     EXCHANGE_FOLDER_NAME = The mailbox folder where all processed e-mails will be moved to
