@@ -4,6 +4,7 @@ import logging
 import json
 import base64
 import random
+import datetime
 
 from exchangelib import Credentials, Account, Configuration, Folder, \
     FileAttachment, errors
@@ -61,24 +62,36 @@ def process_message_meta(message, attachments, path, bucket,
                          publisher, topic_name):
     try:
         message_meta = {
+            'gcp_project': os.environ.get('GCP_PROJECT', ''),
+            'function_name': os.environ.get('FUNCTION_NAME', ''),
+            'function_trigger_type': os.environ.get('FUNCTION_TRIGGER_TYPE',
+                                                    ''),
+            'timestamp': datetime.datetime.utcnow().strftime(
+                "%Y-%m-%dT%H:%M:%S.%fZ")
+        }
+
+        message_data = {
             'message_id': message.id,
             'sender': message.sender.email_address,
+            'receiver': message.received_by.email_address,
             'subject': message.subject,
             'datetime_sent': message.datetime_sent.strftime(
                 "%Y-%m-%dT%H:%M:%S.%fZ"),
             'datetime_received': message.datetime_received.strftime(
                 "%Y-%m-%dT%H:%M:%S.%fZ"),
-            'attachments': attachments
+            'attachments': attachments,
+            'mail': message.unique_body
         }
+        meta = {'meta': message_meta, 'data': message_data}
 
         # Save meta file to bucket
         blob = bucket.blob('{}/metadata.json'.format(path))
-        blob.upload_from_string(json.dumps(message_meta),
+        blob.upload_from_string(json.dumps(meta),
                                 content_type='application/json')
 
         # Publish message to topic
         publisher.publish(topic_name,
-                          bytes(json.dumps(message_meta).encode('utf-8')))
+                          bytes(json.dumps(meta).encode('utf-8')))
     finally:
         logging.info('Finished posting of e-mail meta to Pub/Sub')
 
