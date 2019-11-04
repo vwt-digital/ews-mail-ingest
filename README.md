@@ -5,7 +5,7 @@ The ```config.py``` file (see [config.example.py](config/config.example.py) for 
 
 
 ## Setup
-1. Make sure a ```config.py``` file exists within the ```/functions``` directory, based on the [config.example.py](config/config.example.py), with the correct configuration:
+1. Make sure a ```config.py``` file exists within the ```/config``` directory, based on the [config.example.py](config/config.example.py), with the correct configuration:
     ~~~
     GCP_BUCKET_NAME = The bucket name where the e-mails will be uploaded to
     EXCHANGE_URL = The Exchange service endpoint for the mailbox
@@ -14,7 +14,7 @@ The ```config.py``` file (see [config.example.py](config/config.example.py) for 
     TOPIC_PROJECT_ID = The GCP project which houses the Pub/Sub topic defined next
     TOPIC_NAME = The GCP Pub/Sub topic all processed e-mail meta-info will be posted to
     ~~~
-2. Provision an KMS-encrypted ```exchange_password.enc``` file in the ```/functions``` directory that will be used to decrypt (see [Google Cloud KMS](https://cloud.google.com/kms/docs/encrypt-decrypt))
+2. Provision an KMS-encrypted ```exchange_password.enc``` file in the ```/config``` directory that will be used to decrypt (see [Google Cloud KMS](https://cloud.google.com/kms/docs/encrypt-decrypt))
 3. Make sure the GCP-project and Cloud Builder accounts have access to write to the specific GCS Bucket and GCP Pub/Sub topic
 4. Deploy the function to GCP as a HTTP triggered function as shown in the [cloudbuild.example.yaml](cloudbuild.example.yaml)
 5. Deploy a GCP Cloud Scheduler to call the function as shown in the [cloudbuild.example.yaml](cloudbuild.example.yaml)
