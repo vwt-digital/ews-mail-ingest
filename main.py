@@ -151,7 +151,7 @@ def check_gcs_blob_exists(filename, client, bucket):
     return storage.Blob(bucket=bucket, name=filename).exists(client)
 
 
-def ews_to_bucket():
+def ews_to_bucket(body=None):
     # Initialize Exchange account
     account = initialize_exchange_account()
 
