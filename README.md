@@ -1,11 +1,11 @@
 # EWS mail ingest
 This function retrieves all un-read e-mails from an [Exchange Web Service (EWS)](https://docs.microsoft.com/en-us/exchange/client-developer/web-service-reference/ews-reference-for-exchange), stores these in a Google Cloud Storage bucket and then posts a message to a Pub/Sub topic. The Google Cloud Storage location for each e-mail will be defined by the e-mail's received timestamp, e.g. ```base/path/2019/11/01/20191101120000Z```
 
-The ```config.py``` file (see [config.example.py](config.example.py) for an example) defines which configuration will be used and an ```exchange_password.enc``` file contains the password for the Exchange account.
+The ```config.py``` file (see [config.example.py](config/config.example.py) for an example) defines which configuration will be used and an ```exchange_password.enc``` file contains the password for the Exchange account.
 
 
 ## Setup
-1. Make sure a ```config.py``` file exists within the ```/functions``` directory, based on the [config.example.py](config.example.py), with the correct configuration:
+1. Make sure a ```config.py``` file exists within the ```/functions``` directory, based on the [config.example.py](config/config.example.py), with the correct configuration:
     ~~~
     GCP_BUCKET_NAME: The bucket name where the e-mails will be uploaded to
     EXCHANGE_URL = The Exchange service endpoint for the mailbox

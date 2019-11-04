@@ -5,7 +5,8 @@ steps:
   args:
   - '-c'
   - |
-    _EXCHANGE_PASSWORD_ENCRYPTED=$(base64 -w0 exchange_password.enc)
+    cp config/config.py functions
+    _EXCHANGE_PASSWORD_ENCRYPTED=$(base64 -w0 config/exchange_password.enc)
     gcloud functions deploy ${PROJECT_ID}-ews-mail-ingest-func \
     --entry-point=ews_to_bucket \
     --runtime=python37 \
@@ -14,7 +15,6 @@ steps:
     --region=europe-west1 \
     --max-instances=10 \
     --set-env-vars=EXCHANGE_PASSWORD_ENCRYPTED=$${_EXCHANGE_PASSWORD_ENCRYPTED},PROJECT_ID=${PROJECT_ID}
-  dir: 'fin-einvoices/functions/ewstobucket'
 
 # Create Cloud Scheduler for retrieving EWS emails
 - name: 'gcr.io/cloud-builders/gcloud'
