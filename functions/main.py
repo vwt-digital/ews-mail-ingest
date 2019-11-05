@@ -79,10 +79,15 @@ def process_message_meta(message, attachments, path, bucket,
                 "%Y-%m-%dT%H:%M:%S.%fZ"),
             'datetime_received': message.datetime_received.strftime(
                 "%Y-%m-%dT%H:%M:%S.%fZ"),
-            'attachments': attachments,
-            'mail': message.unique_body
+            'original_email': message.unique_body,
+            'attachments': attachments
         }
-        meta = {'meta': message_meta, 'data': message_data}
+        meta = {
+            'meta': message_meta,
+            'data': {
+                'mail': message_data
+            }
+        }
 
         # Save meta file to bucket
         blob = bucket.blob('{}/metadata.json'.format(path))

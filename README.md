@@ -40,14 +40,16 @@ The meta-info object posted to a GCP Pub/Sub topic is defined as described below
         "timestamp": ""
     },
     "data": {
+      "mail": {
         "message_id": "",
         "sender": "",
         "receiver": "",
         "subject": "",
         "datetime_sent": "",
         "datetime_received": "",
-        "attachments": [],
-        "mail": ""
+        "original_email": "",
+        "attachments": []
+      }
     }
 }
 ~~~
