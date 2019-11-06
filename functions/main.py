@@ -59,13 +59,15 @@ def process_message_status(account, message):
 
 # Post message meta info to Pub/Sub topic
 def process_message_meta(message, attachments, path, bucket,
-                         publisher, topic_name):
+                         publisher, topic_name, request):
     try:
         message_meta = {
             'gcp_project': os.environ.get('GCP_PROJECT', ''),
             'function_name': os.environ.get('FUNCTION_NAME', ''),
             'function_trigger_type': os.environ.get('FUNCTION_TRIGGER_TYPE',
                                                     ''),
+            'function_execution_id': request.headers.get(
+                'Function-Execution-Id', ''),
             'timestamp': datetime.datetime.utcnow().strftime(
                 "%Y-%m-%dT%H:%M:%S.%fZ")
         }
@@ -196,6 +198,6 @@ def ews_to_bucket(request):
                                      attachments=message_attachments,
                                      path=path, bucket=bucket,
                                      publisher=publisher,
-                                     topic_name=topic_name)
+                                     topic_name=topic_name, request=request)
 
                 logging.info('Finished processing of e-mail')

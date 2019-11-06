@@ -37,6 +37,7 @@ The meta-info object posted to a GCP Pub/Sub topic is defined as described below
         "gcp_project": "",
         "function_name": "",
         "function_trigger_type": "",
+        "function_execution_id": "",
         "timestamp": ""
     },
     "data": {

@@ -14,6 +14,7 @@ steps:
     --project=${PROJECT_ID} \
     --region=europe-west1 \
     --max-instances=10 \
+    --memory=512MB \
     --set-env-vars=EXCHANGE_PASSWORD_ENCRYPTED=$${_EXCHANGE_PASSWORD_ENCRYPTED},PROJECT_ID=${PROJECT_ID}
 
 # Create Cloud Scheduler for retrieving EWS emails
