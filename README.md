@@ -33,25 +33,26 @@ The ews-mail-ingest works as follows:
 The meta-info object posted to a GCP Pub/Sub topic is defined as described below.
 ~~~json
 {
-    "meta": {
-        "gcp_project": "",
-        "function_name": "",
-        "function_trigger_type": "",
-        "function_execution_id": "",
-        "timestamp": ""
-    },
-    "data": {
-      "mail": {
-        "message_id": "",
-        "sender": "",
-        "receiver": "",
-        "subject": "",
-        "datetime_sent": "",
-        "datetime_received": "",
-        "original_email": "",
-        "attachments": []
-      }
+  "gobits": [
+    {
+      "gcp_project": "",
+      "execution_id": "",
+      "execution_type": "",
+      "execution_name": "",
+      "execution_trigger_type": "",
+      "timestamp": ""
     }
+  ],
+  "mail": {
+    "message_id": "",
+    "sender": "",
+    "receiver": "",
+    "subject": "",
+    "datetime_sent": "",
+    "datetime_received": "",
+    "original_email": "",
+    "attachments": []
+  }
 }
 ~~~
 

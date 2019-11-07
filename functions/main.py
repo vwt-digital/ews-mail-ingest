@@ -63,11 +63,12 @@ def process_message_meta(message, attachments, path, bucket,
     try:
         message_meta = {
             'gcp_project': os.environ.get('GCP_PROJECT', ''),
-            'function_name': os.environ.get('FUNCTION_NAME', ''),
-            'function_trigger_type': os.environ.get('FUNCTION_TRIGGER_TYPE',
-                                                    ''),
-            'function_execution_id': request.headers.get(
+            'execution_id': request.headers.get(
                 'Function-Execution-Id', ''),
+            'execution_type': 'cloud_function',
+            'execution_name': os.environ.get('FUNCTION_NAME', ''),
+            'execution_trigger_type': os.environ.get('FUNCTION_TRIGGER_TYPE',
+                                                     ''),
             'timestamp': datetime.datetime.utcnow().strftime(
                 "%Y-%m-%dT%H:%M:%S.%fZ")
         }
@@ -84,12 +85,7 @@ def process_message_meta(message, attachments, path, bucket,
             'original_email': message.unique_body,
             'attachments': attachments
         }
-        meta = {
-            'meta': message_meta,
-            'data': {
-                'mail': message_data
-            }
-        }
+        meta = {'gobits': [message_meta], 'mail': message_data}
 
         # Save meta file to bucket
         blob = bucket.blob('{}/metadata.json'.format(path))
