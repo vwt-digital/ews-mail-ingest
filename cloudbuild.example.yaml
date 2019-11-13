@@ -1,0 +1,32 @@
+steps:
+# Deploy ews-mail-ingest function
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    cp config/config.py functions
+    _EXCHANGE_PASSWORD_ENCRYPTED=$(base64 -w0 config/exchange_password.enc)
+    gcloud functions deploy ${PROJECT_ID}-ews-mail-ingest-func \
+    --entry-point=ews_to_bucket \
+    --runtime=python37 \
+    --trigger-http \
+    --project=${PROJECT_ID} \
+    --region=europe-west1 \
+    --max-instances=10 \
+    --memory=512MB \
+    --set-env-vars=EXCHANGE_PASSWORD_ENCRYPTED=$${_EXCHANGE_PASSWORD_ENCRYPTED},PROJECT_ID=${PROJECT_ID}
+
+# Create Cloud Scheduler for retrieving EWS emails
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    gcloud scheduler jobs delete ${PROJECT_ID}-ewsmailingest-job --quiet || true
+    gcloud scheduler jobs create http ${PROJECT_ID}-ewsmailingest-job \
+    --schedule='0 5 * * *' \
+    --uri=https://europe-west1-${PROJECT_ID}.cloudfunctions.net/${PROJECT_ID}-ews-mail-ingest-func/ \
+    --http-method=POST \
+    --oidc-service-account-email=${PROJECT_ID}@appspot.gserviceaccount.com \
+    --oidc-token-audience=https://europe-west1-${PROJECT_ID}.cloudfunctions.net/${PROJECT_ID}-ews-mail-ingest-func
