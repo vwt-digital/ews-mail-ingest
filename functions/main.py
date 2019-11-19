@@ -27,7 +27,7 @@ def process_message_attachments(bucket, message, path):
     for attachment in message.attachments:
         if isinstance(attachment, FileAttachment):
             try:
-                file_path = '%s/%s' % (path, attachment.name)
+                file_path = '%s/%s' % (path, attachment.name.replace(' ', '_').replace('.', '_').replace('-', '_'))
 
                 blob = bucket.blob(file_path)
                 blob.upload_from_string(attachment.content,
