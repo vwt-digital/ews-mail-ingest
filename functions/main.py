@@ -34,7 +34,7 @@ def process_message_attachments(bucket, message, path):
                                         content_type=attachment.content_type)
 
                 message_attachments.append({
-                    'name': attachment.name,
+                    'name': attachment.name.replace(' ', '_').replace('.', '_').replace('-', '_'),
                     'path': f'gs://{config.GCP_BUCKET_NAME}/{file_path}',
                     'content_type': attachment.content_type,
                 })
