@@ -26,21 +26,28 @@ def process_message_attachments(bucket, message, path):
     message_attachments = []
     for attachment in message.attachments:
         if isinstance(attachment, FileAttachment):
+
+            clean_attachment_name = attachment.name.\
+                replace(' ', '_').\
+                replace('.', '_', attachment.name.count('.') - 1).\
+                replace('-', '_')
+
             try:
-                file_path = '%s/%s' % (path, attachment.name)
+
+                file_path = '%s/%s' % (path, clean_attachment_name)
 
                 blob = bucket.blob(file_path)
                 blob.upload_from_string(attachment.content,
                                         content_type=attachment.content_type)
 
                 message_attachments.append({
-                    'name': attachment.name,
+                    'name': clean_attachment_name,
                     'path': f'gs://{config.GCP_BUCKET_NAME}/{file_path}',
                     'content_type': attachment.content_type,
                 })
             finally:
                 logging.info("Finished upload of attachment '{}'".format(
-                    attachment.name))
+                    clean_attachment_name))
 
     return message_attachments
 
