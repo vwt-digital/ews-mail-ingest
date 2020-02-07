@@ -3,7 +3,7 @@ import os
 import logging
 import json
 import base64
-import random
+import secrets
 import datetime
 
 from exchangelib import Credentials, Account, Configuration, Folder, \
@@ -151,7 +151,7 @@ def set_message_path(client, bucket, message):
                                      now.month, now.day, message_id)
 
     if check_gcs_blob_exists(f"{path}/original_email.html", client, bucket):
-        path = '{}_{}'.format(path, random.randrange(10))
+        path = '{}_{}'.format(path, secrets.randbits(64))
 
     return path
 
@@ -176,8 +176,11 @@ def ews_to_bucket(request):
             topic_name = 'projects/{project_id}/topics/{topic}'.format(
                 project_id=config.TOPIC_PROJECT_ID, topic=config.TOPIC_NAME)
 
-            for message in account.inbox.filter(
-                    is_read=False).order_by('-datetime_received'):
+            inbox_query = account.inbox.filter(
+                    is_read=False).order_by('-datetime_received')
+            inbox_query.page_size = 2
+
+            for message in inbox_query.iterator():
                 logging.info('Started processing of e-mail')
 
                 # Set message path
