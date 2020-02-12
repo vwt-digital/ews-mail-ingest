@@ -7,7 +7,7 @@ import secrets
 import datetime
 
 from exchangelib import Credentials, Account, Configuration, Folder, \
-    FileAttachment, errors
+    FileAttachment, errors, Version, Build
 from google.cloud import kms_v1, storage, pubsub_v1
 
 
@@ -123,9 +123,11 @@ def initialize_exchange_account():
     # Initialize connection to Exchange Web Services
     acc_credentials = Credentials(username=config.EXCHANGE_USERNAME,
                                   password=exchange_password)
+    version = Version(build=Build(
+        config.EXCHANGE_VERSION['major'], config.EXCHANGE_VERSION['minor']))
     acc_config = Configuration(
         service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
-        auth_type='basic')
+        auth_type='basic', version=version)
     account = Account(primary_smtp_address=config.EXCHANGE_USERNAME,
                       config=acc_config, autodiscover=False,
                       access_type='delegate')
