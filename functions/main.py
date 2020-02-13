@@ -5,6 +5,7 @@ import json
 import base64
 import secrets
 import datetime
+import requests as py_requests
 
 from exchangelib import Credentials, Account, Configuration, Folder, \
     FileAttachment, errors, Version, Build
@@ -169,51 +170,65 @@ def check_gcs_blob_exists(filename, client, bucket):
 
 def ews_to_bucket(request):
     if request.method == 'POST':
-        # Initialize Exchange account
-        account = initialize_exchange_account()
+        try:
+            account = initialize_exchange_account()
+        except Exception as e:
+            logging.exception(e)
+        finally:
+            if account and account.inbox:
+                if account.inbox.unread_count > 0:
+                    logging.info('Found {} unread e-mails'.format(
+                        account.inbox.unread_count))
 
-        if account.inbox.unread_count > 0:
-            # Initialise GCP bucket
-            client = storage.Client()
-            bucket = client.get_bucket(config.GCP_BUCKET_NAME)
+                    # Initialise GCP bucket
+                    client = storage.Client()
+                    bucket = client.get_bucket(config.GCP_BUCKET_NAME)
 
-            # Initialise Pub/Sub topic
-            publisher = pubsub_v1.PublisherClient()
-            topic_name = 'projects/{project_id}/topics/{topic}'.format(
-                project_id=config.TOPIC_PROJECT_ID, topic=config.TOPIC_NAME)
+                    # Initialise Pub/Sub topic
+                    publisher = pubsub_v1.PublisherClient()
+                    topic_name = 'projects/{project_id}/topics/{topic}'.format(
+                        project_id=config.TOPIC_PROJECT_ID,
+                        topic=config.TOPIC_NAME)
 
-            inbox_query = account.inbox.filter(
-                    is_read=False).order_by('-datetime_received')
-            inbox_query.page_size = 2
+                    inbox_query = account.inbox.filter(
+                        is_read=False).order_by('-datetime_received')
+                    inbox_query.page_size = 2
 
-            for message in inbox_query.iterator():
-                logging.info('Started processing of e-mail')
+                    for message in inbox_query.iterator():
+                        logging.info('Started processing of e-mail')
 
-                # Set message path
-                path = set_message_path(client=client, bucket=bucket,
-                                        message=message)
+                        # Set message path
+                        path = set_message_path(
+                            client=client, bucket=bucket, message=message)
 
-                # Save original message to bucket
-                process_message_original(bucket=bucket, message=message,
-                                         path=path)
+                        # Save original message to bucket
+                        process_message_original(
+                            bucket=bucket, message=message, path=path)
 
-                # Save message attachments to bucket
-                message_attachments = \
-                    process_message_attachments(
-                        client=client, bucket_name=config.GCP_BUCKET_NAME,
-                        message=message, path=path)
+                        # Save message attachments to bucket
+                        message_attachments = \
+                            process_message_attachments(
+                                client=client,
+                                bucket_name=config.GCP_BUCKET_NAME,
+                                message=message, path=path)
 
-                # Mark message as 'read' and move to folder
-                process_message_status(account=account, message=message)
+                        # Mark message as 'read' and move to folder
+                        process_message_status(
+                            account=account, message=message)
 
-                # Post message meta info to Pub/Sub Topic
-                process_message_meta(message=message,
-                                     attachments=message_attachments,
-                                     path=path, bucket=bucket,
-                                     publisher=publisher,
-                                     topic_name=topic_name, request=request)
+                        # Post message meta info to Pub/Sub Topic
+                        process_message_meta(message=message,
+                                             attachments=message_attachments,
+                                             path=path, bucket=bucket,
+                                             publisher=publisher,
+                                             topic_name=topic_name,
+                                             request=request)
 
-                logging.info('Finished processing of e-mail')
+                        logging.info('Finished processing of e-mail')
+                else:
+                    logging.info('No unread e-mails in mailbox')
+            else:
+                logging.warning('Can\'t find the inbox')
 
 
 class GCSObjectStreamUpload(object):
@@ -289,3 +304,11 @@ class GCSObjectStreamUpload(object):
 
     def tell(self) -> int:
         return self._read
+
+
+if __name__ == '__main__':
+    mock_request = py_requests.session()
+    mock_request.method = "POST"
+    logging.getLogger().setLevel(logging.INFO)
+
+    ews_to_bucket(mock_request)
