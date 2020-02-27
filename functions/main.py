@@ -7,6 +7,7 @@ import secrets
 import datetime
 import requests as py_requests
 
+from urllib3 import exceptions as lib_exceptions
 from exchangelib import Credentials, Account, Configuration, Folder, \
     FileAttachment, errors, Version, Build
 from google.auth.transport.requests import AuthorizedSession
@@ -172,9 +173,7 @@ def ews_to_bucket(request):
     if request.method == 'POST':
         try:
             account = initialize_exchange_account()
-        except Exception as e:
-            logging.exception(e)
-        finally:
+
             if account and account.inbox:
                 if account.inbox.unread_count > 0:
                     logging.info('Found {} unread e-mails'.format(
@@ -229,6 +228,12 @@ def ews_to_bucket(request):
                     logging.info('No unread e-mails in mailbox')
             else:
                 logging.warning('Can\'t find the inbox')
+        except (KeyError, ConnectionResetError,
+                py_requests.exceptions.ConnectionError,
+                lib_exceptions.ProtocolError) as e:
+            logging.error(str(e))
+        except Exception as e:
+            logging.exception(e)
 
 
 class GCSObjectStreamUpload(object):
