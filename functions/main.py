@@ -7,8 +7,9 @@ import secrets
 import datetime
 import requests as py_requests
 
+from urllib3 import exceptions as lib_exceptions
 from exchangelib import Credentials, Account, Configuration, Folder, \
-    FileAttachment, errors, Version, Build
+    FileAttachment, errors, Version, Build, FaultTolerance
 from google.auth.transport.requests import AuthorizedSession
 from google.resumable_media import requests, common
 from google.cloud import kms_v1, storage, pubsub_v1
@@ -132,7 +133,8 @@ def initialize_exchange_account():
         config.EXCHANGE_VERSION['major'], config.EXCHANGE_VERSION['minor']))
     acc_config = Configuration(
         service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
-        auth_type='basic', version=version)
+        auth_type='basic', version=version, retry_policy=FaultTolerance(
+            max_wait=300))  # Retry policy of 5 min.
     account = Account(primary_smtp_address=config.EXCHANGE_USERNAME,
                       config=acc_config, autodiscover=False,
                       access_type='delegate')
@@ -172,9 +174,7 @@ def ews_to_bucket(request):
     if request.method == 'POST':
         try:
             account = initialize_exchange_account()
-        except Exception as e:
-            logging.exception(e)
-        finally:
+
             if account and account.inbox:
                 if account.inbox.unread_count > 0:
                     logging.info('Found {} unread e-mails'.format(
@@ -229,6 +229,12 @@ def ews_to_bucket(request):
                     logging.info('No unread e-mails in mailbox')
             else:
                 logging.warning('Can\'t find the inbox')
+        except (KeyError, ConnectionResetError,
+                py_requests.exceptions.ConnectionError,
+                lib_exceptions.ProtocolError) as e:
+            logging.warning(str(e))
+        except Exception as e:
+            logging.exception(e)
 
 
 class GCSObjectStreamUpload(object):
