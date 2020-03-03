@@ -232,7 +232,7 @@ def ews_to_bucket(request):
         except (KeyError, ConnectionResetError,
                 py_requests.exceptions.ConnectionError,
                 lib_exceptions.ProtocolError) as e:
-            logging.error(str(e))
+            logging.warning(str(e))
         except Exception as e:
             logging.exception(e)
 
