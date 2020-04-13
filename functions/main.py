@@ -14,6 +14,9 @@ from google.auth.transport.requests import AuthorizedSession
 from google.resumable_media import requests, common
 from google.cloud import kms_v1, storage, pubsub_v1
 
+# Suppress warnings from exchangelib
+logging.getLogger("exchangelib").setLevel(logging.ERROR)
+
 
 # Upload original e-mail message to GCS storage
 def process_message_original(bucket, message, path):
