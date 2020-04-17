@@ -42,7 +42,6 @@ def process_message_attachments(client, bucket_name, message, path):
 
             try:
                 file_path = '%s/%s' % (path, clean_attachment_name)
-                file_content = attachment.fp
 
                 # Clean PDF from malicious content
                 if attachment.content_type == 'application/pdf':
@@ -57,6 +56,8 @@ def process_message_attachments(client, bucket_name, message, path):
                             writer.write(temp_flat_file)  # Let the writer write into the temp file
                             temp_flat_file.close()  # Close the temp file (stays in `with`)
                             file_content = open(temp_flat_file.name, 'rb')  # Read the content from the temp file
+                else:
+                    file_content = attachment.fp
 
                 with GCSObjectStreamUpload(
                         client=client, bucket_name=bucket_name,
