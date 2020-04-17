@@ -6,6 +6,7 @@ import base64
 import secrets
 import datetime
 import requests as py_requests
+import tempfile
 
 from urllib3 import exceptions as lib_exceptions
 from exchangelib import Credentials, Account, Configuration, Folder, \
@@ -13,6 +14,7 @@ from exchangelib import Credentials, Account, Configuration, Folder, \
 from google.auth.transport.requests import AuthorizedSession
 from google.resumable_media import requests, common
 from google.cloud import kms_v1, storage, pubsub_v1
+from PyPDF2 import PdfFileReader, PdfFileWriter
 
 # Suppress warnings from exchangelib
 logging.getLogger("exchangelib").setLevel(logging.ERROR)
@@ -40,10 +42,25 @@ def process_message_attachments(client, bucket_name, message, path):
 
             try:
                 file_path = '%s/%s' % (path, clean_attachment_name)
+                file_content = attachment.fp
+
+                # Clean PDF from malicious content
+                if attachment.content_type == 'application/pdf':
+                    writer = PdfFileWriter()  # Create a PdfFileWriter to store the new PDF
+                    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                        temp_file.write(attachment.content)
+                        temp_file.close()
+                        reader = PdfFileReader(open(temp_file.name, 'rb'))  # Read the bytes from temp with original b64
+                        [writer.addPage(reader.getPage(i)) for i in range(0, reader.getNumPages())]  # Add pages
+                        writer.removeLinks()  # Remove all linking in PDF (not external website links)
+                        with tempfile.NamedTemporaryFile(mode='w+b', delete=False) as temp_flat_file:
+                            writer.write(temp_flat_file)  # Let the writer write into the temp file
+                            temp_flat_file.close()  # Close the temp file (stays in `with`)
+                            file_content = open(temp_flat_file.name, 'rb')  # Read the content from the temp file
 
                 with GCSObjectStreamUpload(
                         client=client, bucket_name=bucket_name,
-                        blob_name=file_path) as f, attachment.fp as fp:
+                        blob_name=file_path) as f, file_content as fp:
                     buffer = fp.read(1024)
                     while buffer:
                         f.write(buffer)
