@@ -50,8 +50,15 @@ class EWSMailMessage:
 
     def process_message_attachments(self):
         message_attachments = []
+        xml_count = 0
+        pdf_count = 0
+
         for attachment in self.message.attachments:
             if isinstance(attachment, FileAttachment) and attachment.content_type in ['text/xml', 'application/pdf']:
+                if (attachment.content_type == 'text/xml' and xml_count == 1) or \
+                        (attachment.content_type == 'application/pdf' and pdf_count == 10):
+                    continue
+
                 clean_attachment_name = attachment.name.replace(' ', '_'). \
                     replace('.', '_', attachment.name.count('.') - 1).replace('-', '_')
 
@@ -71,8 +78,10 @@ class EWSMailMessage:
                                 self.write_stream_to_blob(self.bucket_name, file_path, open(temp_flat_file.name, 'rb'))
                                 temp_flat_file.close()
                             temp_file.close()
+                        pdf_count += 1
                     else:
                         self.write_stream_to_blob(self.bucket_name, file_path, attachment.fp)
+                        xml_count += 1
 
                     message_attachments.append({
                         'name': clean_attachment_name,
