@@ -20,238 +20,191 @@ from PyPDF2 import PdfFileReader, PdfFileWriter
 logging.getLogger("exchangelib").setLevel(logging.ERROR)
 
 
-# Upload original e-mail message to GCS storage
-def process_message_original(bucket, message, path):
-    try:
-        message_text_blob = bucket.blob('%s/original_email.html' % (
-            path))
-        message_text_blob.upload_from_string(message.unique_body)
-    finally:
-        logging.info("Finished upload of original e-mail content")
+class EWSMailMessage:
+    def __init__(self, exchange_client, storage_client, bucket, bucket_name, publisher, topic_name, message, request):
+        self.exchange_client = exchange_client
+        self.storage_client = storage_client
+        self.bucket = bucket
+        self.bucket_name = bucket_name
+        self.publisher = publisher
+        self.topic_name = topic_name
+        self.message = message
+        self.request = request
+        self.path = self.set_message_path()
 
+    def process(self):
+        logging.info('Started processing of e-mail')
 
-# Upload attachments to GCS storage
-def process_message_attachments(client, bucket_name, message, path):
-    message_attachments = []
-    for attachment in message.attachments:
-        if isinstance(attachment, FileAttachment) and attachment.content_type in ['text/xml', 'application/pdf']:
-            clean_attachment_name = attachment.name. \
-                replace(' ', '_'). \
-                replace('.', '_', attachment.name.count('.') - 1). \
-                replace('-', '_')
-
-            try:
-                file_path = '%s/%s' % (path, clean_attachment_name)
-
-                # Clean PDF from malicious content
-                if attachment.content_type == 'application/pdf':
-                    writer = PdfFileWriter()  # Create a PdfFileWriter to store the new PDF
-                    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                        temp_file.write(attachment.content)
-                        temp_file.close()
-                        reader = PdfFileReader(open(temp_file.name, 'rb'))  # Read the bytes from temp with original b64
-                        [writer.addPage(reader.getPage(i)) for i in range(0, reader.getNumPages())]  # Add pages
-                        writer.removeLinks()  # Remove all linking in PDF (not external website links)
-                        with tempfile.NamedTemporaryFile(mode='w+b', delete=False) as temp_flat_file:
-                            writer.write(temp_flat_file)  # Let the writer write into the temp file
-                            temp_flat_file.close()  # Close the temp file (stays in `with`)
-                            file_content = open(temp_flat_file.name, 'rb')  # Read the content from the temp file
-                else:
-                    file_content = attachment.fp
-
-                with GCSObjectStreamUpload(
-                        client=client, bucket_name=bucket_name,
-                        blob_name=file_path) as f, file_content as fp:
-                    buffer = fp.read(1024)
-                    while buffer:
-                        f.write(buffer)
-                        buffer = fp.read(1024)
-
-                message_attachments.append({
-                    'name': clean_attachment_name,
-                    'path': f'gs://{config.GCP_BUCKET_NAME}/{file_path}',
-                    'content_type': attachment.content_type,
-                })
-            finally:
-                logging.info("Finished upload of attachment '{}'".format(
-                    clean_attachment_name))
-
-    return message_attachments
-
-
-# Mark e-mail as 'read' and move to specified Inbox folder
-def process_message_status(account, message):
-    try:
-        message.is_read = True
-        message.save(update_fields=['is_read'])
-
-        to_folder = account.inbox / config.EXCHANGE_FOLDER_NAME
-        message.move(to_folder)
-    finally:
-        logging.info('Finished moving of e-mail')
-
-
-# Post message meta info to Pub/Sub topic
-def process_message_meta(message, attachments, path, bucket,
-                         publisher, topic_name, request):
-    try:
-        message_meta = {
-            'gcp_project': os.environ.get('GCP_PROJECT', ''),
-            'execution_id': request.headers.get(
-                'Function-Execution-Id', ''),
-            'execution_type': 'cloud_function',
-            'execution_name': os.environ.get('FUNCTION_NAME', ''),
-            'execution_trigger_type': os.environ.get('FUNCTION_TRIGGER_TYPE',
-                                                     ''),
-            'timestamp': datetime.datetime.utcnow().strftime(
-                "%Y-%m-%dT%H:%M:%S.%fZ")
-        }
-
-        message_data = {
-            'message_id': message.id,
-            'sender': message.sender.email_address,
-            'receiver': message.received_by.email_address,
-            'subject': message.subject,
-            'datetime_sent': message.datetime_sent.strftime(
-                "%Y-%m-%dT%H:%M:%S.%fZ"),
-            'datetime_received': message.datetime_received.strftime(
-                "%Y-%m-%dT%H:%M:%S.%fZ"),
-            'original_email': message.unique_body,
-            'attachments': attachments
-        }
-        meta = {'gobits': [message_meta], 'mail': message_data}
-
-        # Save meta file to bucket
-        blob = bucket.blob('{}/metadata.json'.format(path))
-        blob.upload_from_string(json.dumps(meta),
-                                content_type='application/json')
-
-        # Publish message to topic
-        publisher.publish(topic_name,
-                          bytes(json.dumps(meta).encode('utf-8')))
-    finally:
-        logging.info('Finished posting of e-mail meta to Pub/Sub')
-
-
-# Setup Exchange account and add sub-folder if not existing
-def initialize_exchange_account():
-    # Decode KMS encrypted password
-    exchange_password_encrypted = base64.b64decode(
-        os.environ['EXCHANGE_PASSWORD_ENCRYPTED'])
-    kms_client = kms_v1.KeyManagementServiceClient()
-    crypto_key_name = kms_client.crypto_key_path_path(
-        os.environ['PROJECT_ID'], 'europe',
-        'ews-api', 'ews-api-credentials')
-    decrypt_response = kms_client.decrypt(
-        crypto_key_name, exchange_password_encrypted)
-    exchange_password = decrypt_response.plaintext \
-        .decode("utf-8").replace('\n', '')
-
-    # Initialize connection to Exchange Web Services
-    acc_credentials = Credentials(username=config.EXCHANGE_USERNAME,
-                                  password=exchange_password)
-    version = Version(build=Build(
-        config.EXCHANGE_VERSION['major'], config.EXCHANGE_VERSION['minor']))
-    acc_config = Configuration(
-        service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
-        auth_type='basic', version=version, retry_policy=FaultTolerance(
-            max_wait=300))  # Retry policy of 5 min.
-    account = Account(primary_smtp_address=config.EXCHANGE_USERNAME,
-                      config=acc_config, autodiscover=False,
-                      access_type='delegate')
-
-    # Create sub folder for processed e-mails
-    try:
-        processed_folder = Folder(parent=account.inbox,
-                                  name=config.EXCHANGE_FOLDER_NAME)
-        processed_folder.save()
-    except errors.ErrorFolderExists:
-        pass
-
-    return account
-
-
-# Set message path for GCP bucket
-def set_message_path(client, bucket, message):
-    now = message.datetime_sent
-    message_id = '%04d%02d%02dT%02d%02d%02dZ' % (now.year, now.month, now.day,
-                                                 now.hour, now.minute,
-                                                 now.second)
-    path = '%s/%04d/%02d/%02d/%s' % (config.EXCHANGE_USERNAME, now.year,
-                                     now.month, now.day, message_id)
-
-    if check_gcs_blob_exists(f"{path}/original_email.html", client, bucket):
-        path = '{}_{}'.format(path, secrets.randbits(64))
-
-    return path
-
-
-# Check if blob already exists
-def check_gcs_blob_exists(filename, client, bucket):
-    return storage.Blob(bucket=bucket, name=filename).exists(client)
-
-
-def ews_to_bucket(request):
-    if request.method == 'POST':
+        # Save original message to bucket
         try:
-            account = initialize_exchange_account()
+            message_text_blob = self.bucket.blob('%s/original_email.html' % self.path)
+            message_text_blob.upload_from_string(self.message.unique_body)
+        finally:
+            logging.info("Finished upload of original e-mail content")
 
-            if account and account.inbox:
-                if account.inbox.unread_count > 0:
-                    logging.info('Found {} unread e-mails'.format(
-                        account.inbox.unread_count))
+        message_attachments = self.process_message_attachments()
+        self.process_message_status()
+        self.process_message_meta(attachments=message_attachments)
 
-                    # Initialise GCP bucket
-                    client = storage.Client()
-                    bucket = client.get_bucket(config.GCP_BUCKET_NAME)
+        logging.info('Finished processing of e-mail')
 
-                    # Initialise Pub/Sub topic
-                    publisher = pubsub_v1.PublisherClient()
-                    topic_name = 'projects/{project_id}/topics/{topic}'.format(
-                        project_id=config.TOPIC_PROJECT_ID,
-                        topic=config.TOPIC_NAME)
+    def process_message_attachments(self):
+        message_attachments = []
+        for attachment in self.message.attachments:
+            if isinstance(attachment, FileAttachment) and attachment.content_type in ['text/xml', 'application/pdf']:
+                clean_attachment_name = attachment.name.replace(' ', '_'). \
+                    replace('.', '_', attachment.name.count('.') - 1).replace('-', '_')
 
-                    inbox_query = account.inbox.filter(
-                        is_read=False).order_by('-datetime_received')
+                try:
+                    file_path = '%s/%s' % (self.path, clean_attachment_name)
+
+                    # Clean PDF from malicious content
+                    if attachment.content_type == 'application/pdf':
+                        writer = PdfFileWriter()  # Create a PdfFileWriter to store the new PDF
+                        with tempfile.NamedTemporaryFile(delete=True) as temp_file:
+                            temp_file.write(attachment.content)
+                            reader = PdfFileReader(open(temp_file.name, 'rb'))
+                            [writer.addPage(reader.getPage(i)) for i in range(0, reader.getNumPages())]
+                            writer.removeLinks()
+                            with tempfile.NamedTemporaryFile(mode='w+b', delete=True) as temp_flat_file:
+                                writer.write(temp_flat_file)
+                                self.write_stream_to_blob(self.bucket_name, file_path, open(temp_flat_file.name, 'rb'))
+                                temp_flat_file.close()
+                            temp_file.close()
+                    else:
+                        self.write_stream_to_blob(self.bucket_name, file_path, attachment.fp)
+
+                    message_attachments.append({
+                        'name': clean_attachment_name,
+                        'path': f'gs://{config.GCP_BUCKET_NAME}/{file_path}',
+                        'content_type': attachment.content_type,
+                    })
+                finally:
+                    logging.info("Finished upload of attachment '{}'".format(clean_attachment_name))
+
+        return message_attachments
+
+    def write_stream_to_blob(self, bucket_name, path, content):
+        with GCSObjectStreamUpload(
+                client=self.storage_client, bucket_name=bucket_name, blob_name=path) as f, content as fp:
+            buffer = fp.read(1024)
+            while buffer:
+                f.write(buffer)
+                buffer = fp.read(1024)
+
+    def process_message_status(self):
+        try:
+            self.message.is_read = True
+            self.message.save(update_fields=['is_read'])
+            self.message.move(self.exchange_client.inbox / config.EXCHANGE_FOLDER_NAME)
+        finally:
+            logging.info('Finished moving of e-mail')
+
+    def process_message_meta(self, attachments):
+        try:
+            message_meta = {
+                'gcp_project': os.environ.get('GCP_PROJECT', ''),
+                'execution_id': self.request.headers.get('Function-Execution-Id', ''),
+                'execution_type': 'cloud_function',
+                'execution_name': os.environ.get('FUNCTION_NAME', ''),
+                'execution_trigger_type': os.environ.get('FUNCTION_TRIGGER_TYPE', ''),
+                'timestamp': datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            }
+
+            message_data = {
+                'message_id': self.message.id,
+                'sender': self.message.sender.email_address,
+                'receiver': self.message.received_by.email_address,
+                'subject': self.message.subject,
+                'datetime_sent': self.message.datetime_sent.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                'datetime_received': self.message.datetime_received.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                'original_email': self.message.unique_body,
+                'attachments': attachments
+            }
+            meta = {'gobits': [message_meta], 'mail': message_data}
+
+            # Save meta file to bucket
+            blob = self.bucket.blob('{}/metadata.json'.format(self.path))
+            blob.upload_from_string(json.dumps(meta), content_type='application/json')
+
+            # Publish message to topic
+            self.publisher.publish(self.topic_name, bytes(json.dumps(meta).encode('utf-8')))
+        finally:
+            logging.info('Finished posting of e-mail meta to Pub/Sub')
+
+    def set_message_path(self):
+        now = self.message.datetime_sent
+        message_id = '%04d%02d%02dT%02d%02d%02dZ' % (now.year, now.month, now.day, now.hour, now.minute, now.second)
+        path = '%s/%04d/%02d/%02d/%s' % (config.EXCHANGE_USERNAME, now.year, now.month, now.day, message_id)
+
+        if self.check_gcs_blob_exists(f"{path}/original_email.html"):
+            path = '{}_{}'.format(path, secrets.randbits(64))
+
+        return path
+
+    # Check if blob already exists
+    def check_gcs_blob_exists(self, name):
+        return storage.Blob(bucket=self.bucket, name=name).exists(self.storage_client)
+
+
+class EWSMailIngest:
+    def __init__(self, request):
+        # Decode KMS encrypted password
+        exchange_password_encrypted = base64.b64decode(os.environ['EXCHANGE_PASSWORD_ENCRYPTED'])
+        kms_client = kms_v1.KeyManagementServiceClient()
+        crypto_key_name = kms_client.crypto_key_path_path(os.environ['PROJECT_ID'], 'europe', 'ews-api',
+                                                          'ews-api-credentials')
+        decrypt_response = kms_client.decrypt(crypto_key_name, exchange_password_encrypted)
+        exchange_password = decrypt_response.plaintext.decode("utf-8").replace('\n', '')
+
+        # Initialize connection to Exchange Web Services
+        acc_credentials = Credentials(username=config.EXCHANGE_USERNAME, password=exchange_password)
+        version = Version(build=Build(config.EXCHANGE_VERSION['major'], config.EXCHANGE_VERSION['minor']))
+        acc_config = Configuration(service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
+                                   auth_type='basic', version=version, retry_policy=FaultTolerance(max_wait=300))
+        self.exchange_client = Account(primary_smtp_address=config.EXCHANGE_USERNAME, config=acc_config,
+                                       autodiscover=False, access_type='delegate')
+
+        self.storage_client = storage.Client()
+        self.bucket = self.storage_client.get_bucket(config.GCP_BUCKET_NAME)
+        self.bucket_name = config.GCP_BUCKET_NAME
+        self.request = request
+        self.publisher = pubsub_v1.PublisherClient()
+        self.topic_name = 'projects/{project_id}/topics/{topic}'.format(project_id=config.TOPIC_PROJECT_ID,
+                                                                        topic=config.TOPIC_NAME)
+
+    def initialize_exchange_account(self):
+        try:
+            processed_folder = Folder(parent=self.exchange_client.inbox, name=config.EXCHANGE_FOLDER_NAME)
+            processed_folder.save()
+        except errors.ErrorFolderExists:
+            pass
+
+    def process(self):
+        try:
+            self.initialize_exchange_account()
+
+            if self.exchange_client and self.exchange_client.inbox:
+                if self.exchange_client.inbox.unread_count > 0:
+                    logging.info('Found {} unread e-mails'.format(self.exchange_client.inbox.unread_count))
+
+                    inbox_query = self.exchange_client.inbox.filter(is_read=False).order_by('-datetime_received')
                     inbox_query.page_size = 2
 
                     for message in inbox_query.iterator():
-                        logging.info('Started processing of e-mail')
-
-                        # Set message path
-                        path = set_message_path(
-                            client=client, bucket=bucket, message=message)
-
-                        # Save original message to bucket
-                        process_message_original(
-                            bucket=bucket, message=message, path=path)
-
-                        # Save message attachments to bucket
-                        message_attachments = \
-                            process_message_attachments(
-                                client=client,
-                                bucket_name=config.GCP_BUCKET_NAME,
-                                message=message, path=path)
-
-                        # Mark message as 'read' and move to folder
-                        process_message_status(
-                            account=account, message=message)
-
-                        # Post message meta info to Pub/Sub Topic
-                        process_message_meta(message=message,
-                                             attachments=message_attachments,
-                                             path=path, bucket=bucket,
-                                             publisher=publisher,
-                                             topic_name=topic_name,
-                                             request=request)
-
-                        logging.info('Finished processing of e-mail')
+                        EWSMailMessage(exchange_client=self.exchange_client,
+                                       storage_client=self.storage_client,
+                                       bucket=self.bucket,
+                                       bucket_name=self.bucket_name,
+                                       publisher=self.publisher,
+                                       topic_name=self.topic_name,
+                                       message=message,
+                                       request=self.request).process()
                 else:
                     logging.info('No unread e-mails in mailbox')
             else:
                 logging.warning('Can\'t find the inbox')
-        except (KeyError, ConnectionResetError,
-                py_requests.exceptions.ConnectionError,
+        except (KeyError, ConnectionResetError, py_requests.exceptions.ConnectionError,
                 lib_exceptions.ProtocolError) as e:
             logging.warning(str(e))
         except Exception as e:
@@ -331,6 +284,11 @@ class GCSObjectStreamUpload(object):
 
     def tell(self) -> int:
         return self._read
+
+
+def ews_to_bucket(request):
+    if request.method == 'POST':
+        EWSMailIngest(request=request).process()
 
 
 if __name__ == '__main__':
