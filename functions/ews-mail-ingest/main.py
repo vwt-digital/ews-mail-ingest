@@ -32,7 +32,7 @@ def process_message_original(bucket, message, path):
 def process_message_attachments(client, bucket_name, message, path):
     message_attachments = []
     for attachment in message.attachments:
-        if isinstance(attachment, FileAttachment):
+        if isinstance(attachment, FileAttachment) and attachment.content_type in ['text/xml', 'application/pdf']:
             clean_attachment_name = attachment.name. \
                 replace(' ', '_'). \
                 replace('.', '_', attachment.name.count('.') - 1). \
