@@ -42,9 +42,9 @@ class EWSMailMessage:
         finally:
             logging.info("Finished upload of original e-mail content")
 
-        message_attachments = self.process_message_attachments()
-        self.process_message_status()
-        self.process_message_meta(attachments=message_attachments)
+        message_attachments = self.process_message_attachments()  # Save attachments
+        self.process_message_status()  # Move message to other inbox
+        self.process_message_meta(attachments=message_attachments)  # Post meta to bucket and Pub/Sub
 
         logging.info('Finished processing of e-mail')
 
@@ -55,8 +55,15 @@ class EWSMailMessage:
 
         for attachment in self.message.attachments:
             if isinstance(attachment, FileAttachment) and attachment.content_type in ['text/xml', 'application/pdf']:
-                if (attachment.content_type == 'text/xml' and xml_count == 1) or \
-                        (attachment.content_type == 'application/pdf' and pdf_count == 10):
+                if attachment.content_type == 'text/xml' and xml_count == 1:
+                    logging.info("Skipped XML file '{}' because maximum file of 1 is exceeded".format(attachment.name))
+                    continue
+                elif attachment.content_type == 'application/pdf' and pdf_count == 10:
+                    logging.info(
+                        "Skipped PDF file '{}' because maximum files of 10 is exceeded".format(attachment.name))
+                    continue
+                elif attachment.size > 5242880:
+                    logging.info("Skipped file '{}' because maximum size of 5MB is exceeded".format(attachment.name))
                     continue
 
                 clean_attachment_name = attachment.name.replace(' ', '_'). \
