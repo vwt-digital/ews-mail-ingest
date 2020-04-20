@@ -50,20 +50,23 @@ class EWSMailMessage:
 
     def process_message_attachments(self):
         message_attachments = []
+        total_count = len(self.message.attachments)
+        uploaded_count = 0
         xml_count = 0
         pdf_count = 0
 
+        logging.info("Started uploading attachments...")
         for attachment in self.message.attachments:
             if isinstance(attachment, FileAttachment) and attachment.content_type in ['text/xml', 'application/pdf']:
-                if attachment.content_type == 'text/xml' and xml_count == 1:
+                if attachment.size > 5242880:  # 5MB limit
+                    logging.info("Skipped file '{}' because maximum size of 5MB is exceeded".format(attachment.name))
+                    continue
+                elif attachment.content_type == 'text/xml' and xml_count >= 1:
                     logging.info("Skipped XML file '{}' because maximum file of 1 is exceeded".format(attachment.name))
                     continue
-                elif attachment.content_type == 'application/pdf' and pdf_count == 10:
+                elif attachment.content_type == 'application/pdf' and pdf_count >= 5:
                     logging.info(
-                        "Skipped PDF file '{}' because maximum files of 10 is exceeded".format(attachment.name))
-                    continue
-                elif attachment.size > 5242880:
-                    logging.info("Skipped file '{}' because maximum size of 5MB is exceeded".format(attachment.name))
+                        "Skipped PDF file '{}' because maximum files of 5 is exceeded".format(attachment.name))
                     continue
 
                 clean_attachment_name = attachment.name.replace(' ', '_'). \
@@ -95,9 +98,12 @@ class EWSMailMessage:
                         'path': f'gs://{config.GCP_BUCKET_NAME}/{file_path}',
                         'content_type': attachment.content_type,
                     })
-                finally:
-                    logging.info("Finished upload of attachment '{}'".format(clean_attachment_name))
+                    uploaded_count += 1
+                except Exception as exception:
+                    logging.error(str(exception))
+                    continue
 
+        logging.info("Finished uploading {} of {} attachment(s)".format(uploaded_count, total_count))
         return message_attachments
 
     def write_stream_to_blob(self, bucket_name, path, content):
@@ -202,9 +208,11 @@ class EWSMailIngest:
 
             if self.exchange_client and self.exchange_client.inbox:
                 if self.exchange_client.inbox.unread_count > 0:
-                    logging.info('Found {} unread e-mails'.format(self.exchange_client.inbox.unread_count))
+                    logging.info('Found {} unread e-mail(s)'.format(self.exchange_client.inbox.unread_count))
 
-                    inbox_query = self.exchange_client.inbox.filter(is_read=False).order_by('-datetime_received')
+                    inbox_query = self.exchange_client.inbox.filter(is_read=False) \
+                        .order_by('-datetime_received').only('subject', 'sender', 'received_by', 'datetime_sent',
+                                                             'datetime_received', 'unique_body', 'attachments')
                     inbox_query.page_size = 2
 
                     for message in inbox_query.iterator():
@@ -219,10 +227,10 @@ class EWSMailIngest:
                 else:
                     logging.info('No unread e-mails in mailbox')
             else:
-                logging.warning('Can\'t find the inbox')
+                logging.error("Can't find the inbox")
         except (KeyError, ConnectionResetError, py_requests.exceptions.ConnectionError,
                 lib_exceptions.ProtocolError) as e:
-            logging.warning(str(e))
+            logging.error(str(e))
         except Exception as e:
             logging.exception(e)
 
