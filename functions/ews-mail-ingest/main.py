@@ -6,6 +6,7 @@ import base64
 import secrets
 import datetime
 import requests as py_requests
+import tempfile
 
 from urllib3 import exceptions as lib_exceptions
 from exchangelib import Credentials, Account, Configuration, Folder, \
@@ -13,6 +14,7 @@ from exchangelib import Credentials, Account, Configuration, Folder, \
 from google.auth.transport.requests import AuthorizedSession
 from google.resumable_media import requests, common
 from google.cloud import kms_v1, storage, pubsub_v1
+from PyPDF2 import PdfFileReader, PdfFileWriter
 
 # Suppress warnings from exchangelib
 logging.getLogger("exchangelib").setLevel(logging.ERROR)
@@ -84,7 +86,20 @@ class EWSMailMessage:
                     file_path = '%s/%s' % (self.path, clean_attachment_name)
 
                     if attachment.content_type == 'application/pdf':
-                        self.write_stream_to_blob(self.bucket_name, file_path, attachment.fp)
+                        writer = PdfFileWriter()
+                        with tempfile.TemporaryFile(mode='w+b') as temp_file, attachment.fp as fp:
+                            buffer = fp.read(1024)
+                            while buffer:
+                                temp_file.write(buffer)
+                                buffer = fp.read(1024)
+                            reader = PdfFileReader(temp_file)
+                            [writer.addPage(reader.getPage(i)) for i in range(0, reader.getNumPages())]
+                            writer.removeLinks()
+                            with tempfile.NamedTemporaryFile(mode='w+b', delete=False) as temp_flat_file:
+                                writer.write(temp_flat_file)
+                                temp_flat_file.close()
+                                self.write_stream_to_blob(self.bucket_name, file_path, open(temp_flat_file.name, 'rb'))
+                            temp_file.close()
                         pdf_count += 1
                     else:
                         self.write_stream_to_blob(self.bucket_name, file_path, attachment.fp)
@@ -97,7 +112,7 @@ class EWSMailMessage:
                     })
                     uploaded_count += 1
                 except Exception as exception:
-                    logging.error(str(exception))
+                    self.logger.exception(exception)
                     continue
 
         if xml_count == 1 and pdf_count > 0:
@@ -109,8 +124,8 @@ class EWSMailMessage:
         return message_attachments, False
 
     def write_stream_to_blob(self, bucket_name, path, content):
-        with GCSObjectStreamUpload(
-                client=self.storage_client, bucket_name=bucket_name, blob_name=path) as f, content as fp:
+        with GCSObjectStreamUpload(client=self.storage_client, bucket_name=bucket_name, blob_name=path) as f,\
+                content as fp:
             buffer = fp.read(1024)
             while buffer:
                 f.write(buffer)
