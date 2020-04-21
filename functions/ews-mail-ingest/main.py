@@ -6,7 +6,6 @@ import base64
 import secrets
 import datetime
 import requests as py_requests
-import tempfile
 
 from urllib3 import exceptions as lib_exceptions
 from exchangelib import Credentials, Account, Configuration, Folder, \
@@ -14,7 +13,6 @@ from exchangelib import Credentials, Account, Configuration, Folder, \
 from google.auth.transport.requests import AuthorizedSession
 from google.resumable_media import requests, common
 from google.cloud import kms_v1, storage, pubsub_v1
-from PyPDF2 import PdfFileReader, PdfFileWriter
 
 # Suppress warnings from exchangelib
 logging.getLogger("exchangelib").setLevel(logging.ERROR)
@@ -86,17 +84,7 @@ class EWSMailMessage:
                     file_path = '%s/%s' % (self.path, clean_attachment_name)
 
                     if attachment.content_type == 'application/pdf':
-                        writer = PdfFileWriter()
-                        with tempfile.NamedTemporaryFile(delete=True) as temp_file:
-                            temp_file.write(attachment.content)
-                            reader = PdfFileReader(open(temp_file.name, 'rb'))
-                            [writer.addPage(reader.getPage(i)) for i in range(0, reader.getNumPages())]
-                            writer.removeLinks()
-                            with tempfile.NamedTemporaryFile(mode='w+b', delete=True) as temp_flat_file:
-                                writer.write(temp_flat_file)
-                                self.write_stream_to_blob(self.bucket_name, file_path, open(temp_flat_file.name, 'rb'))
-                                temp_flat_file.close()
-                            temp_file.close()
+                        self.write_stream_to_blob(self.bucket_name, file_path, attachment.fp)
                         pdf_count += 1
                     else:
                         self.write_stream_to_blob(self.bucket_name, file_path, attachment.fp)
