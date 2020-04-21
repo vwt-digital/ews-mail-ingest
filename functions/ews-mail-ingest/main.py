@@ -8,6 +8,8 @@ import datetime
 import requests as py_requests
 import tempfile
 
+from defusedxml import ElementTree as ET, common as dxml_common
+
 from urllib3 import exceptions as lib_exceptions
 from exchangelib import Credentials, Account, Configuration, Folder, \
     FileAttachment, errors, Version, Build, FaultTolerance
@@ -90,7 +92,19 @@ class EWSMailMessage:
                             temp_file.close()
                         pdf_count += 1
                     else:
-                        self.write_stream_to_blob(self.bucket_name, file_path, attachment.fp)
+                        try:
+                            xml = ET.fromstring(attachment.content)
+                            xml_string = ET.tostring(xml, encoding="utf8", method="xml")
+                        except dxml_common.DefusedXmlException as e:
+                            logging.info(
+                                "Skipped XML '{}' because parsing failed: {}".format(attachment.name, str(e)))
+                            continue
+
+                        with tempfile.NamedTemporaryFile(mode='w+b', delete=True) as temp_flat_file:
+                            temp_flat_file.write(xml_string)
+                            self.write_stream_to_blob(self.bucket_name, file_path, open(temp_flat_file.name, 'rb'))
+                            temp_flat_file.close()
+
                         xml_count += 1
 
                     message_attachments.append({
