@@ -32,23 +32,31 @@ class EWSMailMessage:
         self.topic_name = topic_name
         self.message = message
         self.request = request
-        self.path = self.set_message_path()
+        self.path, self.message_id = self.set_message_path()
+        self.folder_processed = 'processed'
+        self.folder_processed_failed = 'processed_failed'
+
+        self.logger = custom_logger(self.message_id)
 
     def process(self):
-        logging.info('Started processing of e-mail')
-
-        # Save original message to bucket
         try:
-            message_text_blob = self.bucket.blob('%s/original_email.html' % self.path)
-            message_text_blob.upload_from_string(self.message.unique_body)
-        finally:
-            logging.info("Finished upload of original e-mail content")
+            self.logger.info('Started processing of e-mail')
 
-        message_attachments = self.process_message_attachments()  # Save attachments
-        self.process_message_status()  # Move message to other inbox
-        self.process_message_meta(attachments=message_attachments)  # Post meta to bucket and Pub/Sub
+            self.process_original_message()  # Save original message to bucket
+            message_attachments, complete = self.process_message_attachments()  # Save attachments
+            meta = self.process_message_meta(attachments=message_attachments)  # Post meta to bucket and Pub/Sub
 
-        logging.info('Finished processing of e-mail')
+            if complete:
+                self.publisher.publish(
+                    self.topic_name, bytes(json.dumps(meta).encode('utf-8')))  # Publish message to topic
+                self.move_message(True)  # Move message to other inbox
+
+                self.logger.info('Finished processing of e-mail')
+            else:
+                self.move_message(False)  # Move and flag message
+                self.logger.info('Finished processing of incorrect e-mail')
+        except Exception as exception:
+            self.logger.exception(exception)
 
     def process_message_attachments(self):
         message_attachments = []
@@ -57,17 +65,19 @@ class EWSMailMessage:
         xml_count = 0
         pdf_count = 0
 
-        logging.info("Started uploading attachments...")
+        self.logger.info("Started uploading attachments...")
         for attachment in self.message.attachments:
             if isinstance(attachment, FileAttachment) and attachment.content_type in ['text/xml', 'application/pdf']:
                 if attachment.size > 5242880:  # 5MB limit
-                    logging.info("Skipped file '{}' because maximum size of 5MB is exceeded".format(attachment.name))
+                    self.logger.info(
+                        "Skipped file '{}' because maximum size of 5MB is exceeded".format(attachment.name))
                     continue
                 elif attachment.content_type == 'text/xml' and xml_count >= 1:
-                    logging.info("Skipped XML file '{}' because maximum file of 1 is exceeded".format(attachment.name))
+                    self.logger.info(
+                        "Skipped XML file '{}' because maximum file of 1 is exceeded".format(attachment.name))
                     continue
                 elif attachment.content_type == 'application/pdf' and pdf_count >= 5:
-                    logging.info(
+                    self.logger.info(
                         "Skipped PDF file '{}' because maximum files of 5 is exceeded".format(attachment.name))
                     continue
 
@@ -77,9 +87,8 @@ class EWSMailMessage:
                 try:
                     file_path = '%s/%s' % (self.path, clean_attachment_name)
 
-                    # Clean PDF from malicious content
                     if attachment.content_type == 'application/pdf':
-                        writer = PdfFileWriter()  # Create a PdfFileWriter to store the new PDF
+                        writer = PdfFileWriter()
                         with tempfile.NamedTemporaryFile(delete=True) as temp_file:
                             temp_file.write(attachment.content)
                             reader = PdfFileReader(open(temp_file.name, 'rb'))
@@ -117,8 +126,13 @@ class EWSMailMessage:
                     logging.error(str(exception))
                     continue
 
-        logging.info("Finished uploading {} of {} attachment(s)".format(uploaded_count, total_count))
-        return message_attachments
+        if xml_count == 1 and pdf_count > 0:
+            self.logger.info("Finished uploading {} of {} attachment(s)".format(uploaded_count, total_count))
+            return message_attachments, True
+
+        self.logger.info("Message has not enough correct files, " +
+                         "only {} XML file(s) and {} PDF file(s) are present".format(xml_count, pdf_count))
+        return message_attachments, False
 
     def write_stream_to_blob(self, bucket_name, path, content):
         with GCSObjectStreamUpload(
@@ -128,45 +142,43 @@ class EWSMailMessage:
                 f.write(buffer)
                 buffer = fp.read(1024)
 
-    def process_message_status(self):
-        try:
-            self.message.is_read = True
-            self.message.save(update_fields=['is_read'])
-            self.message.move(self.exchange_client.inbox / config.EXCHANGE_FOLDER_NAME)
-        finally:
-            logging.info('Finished moving of e-mail')
+    def process_original_message(self):
+        message_text_blob = self.bucket.blob('%s/original_email.html' % self.path)
+        message_text_blob.upload_from_string(self.message.unique_body)
+
+    def move_message(self, success=True):
+        self.message.is_read = True
+        self.message.save(update_fields=['is_read'])
+        self.message.move(self.exchange_client.inbox /
+                          (self.folder_processed if success else self.folder_processed_failed))
 
     def process_message_meta(self, attachments):
-        try:
-            message_meta = {
-                'gcp_project': os.environ.get('GCP_PROJECT', ''),
-                'execution_id': self.request.headers.get('Function-Execution-Id', ''),
-                'execution_type': 'cloud_function',
-                'execution_name': os.environ.get('FUNCTION_NAME', ''),
-                'execution_trigger_type': os.environ.get('FUNCTION_TRIGGER_TYPE', ''),
-                'timestamp': datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-            }
+        message_meta = {
+            'gcp_project': os.environ.get('GCP_PROJECT', ''),
+            'execution_id': self.request.headers.get('Function-Execution-Id', ''),
+            'execution_type': 'cloud_function',
+            'execution_name': os.environ.get('FUNCTION_NAME', ''),
+            'execution_trigger_type': os.environ.get('FUNCTION_TRIGGER_TYPE', ''),
+            'timestamp': datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        }
 
-            message_data = {
-                'message_id': self.message.id,
-                'sender': self.message.sender.email_address,
-                'receiver': self.message.received_by.email_address,
-                'subject': self.message.subject,
-                'datetime_sent': self.message.datetime_sent.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-                'datetime_received': self.message.datetime_received.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-                'original_email': self.message.unique_body,
-                'attachments': attachments
-            }
-            meta = {'gobits': [message_meta], 'mail': message_data}
+        message_data = {
+            'message_id': self.message.id,
+            'sender': self.message.sender.email_address,
+            'receiver': self.message.received_by.email_address,
+            'subject': self.message.subject,
+            'datetime_sent': self.message.datetime_sent.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            'datetime_received': self.message.datetime_received.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            'original_email': self.message.unique_body,
+            'attachments': attachments
+        }
+        meta = {'gobits': [message_meta], 'mail': message_data}
 
-            # Save meta file to bucket
-            blob = self.bucket.blob('{}/metadata.json'.format(self.path))
-            blob.upload_from_string(json.dumps(meta), content_type='application/json')
+        # Save meta file to bucket
+        blob = self.bucket.blob('{}/metadata.json'.format(self.path))
+        blob.upload_from_string(json.dumps(meta), content_type='application/json')
 
-            # Publish message to topic
-            self.publisher.publish(self.topic_name, bytes(json.dumps(meta).encode('utf-8')))
-        finally:
-            logging.info('Finished posting of e-mail meta to Pub/Sub')
+        return meta
 
     def set_message_path(self):
         now = self.message.datetime_sent
@@ -176,7 +188,7 @@ class EWSMailMessage:
         if self.check_gcs_blob_exists(f"{path}/original_email.html"):
             path = '{}_{}'.format(path, secrets.randbits(64))
 
-        return path
+        return path, path.split('/').pop()
 
     # Check if blob already exists
     def check_gcs_blob_exists(self, name):
@@ -210,8 +222,16 @@ class EWSMailIngest:
                                                                         topic=config.TOPIC_NAME)
 
     def initialize_exchange_account(self):
+        # Create 'processed' folder
         try:
-            processed_folder = Folder(parent=self.exchange_client.inbox, name=config.EXCHANGE_FOLDER_NAME)
+            processed_folder = Folder(parent=self.exchange_client.inbox, name="processed")
+            processed_folder.save()
+        except errors.ErrorFolderExists:
+            pass
+
+        # Create 'processed_failed' folder
+        try:
+            processed_folder = Folder(parent=self.exchange_client.inbox, name="processed_failed")
             processed_folder.save()
         except errors.ErrorFolderExists:
             pass
@@ -322,6 +342,15 @@ class GCSObjectStreamUpload(object):
 
     def tell(self) -> int:
         return self._read
+
+
+def custom_logger(logger_name):
+    """
+    Method to return a custom logger with the given name and level
+    """
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.INFO)
+    return logger
 
 
 def ews_to_bucket(request):
