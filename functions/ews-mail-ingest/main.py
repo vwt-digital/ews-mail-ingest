@@ -7,6 +7,7 @@ import secrets
 import datetime
 import requests as py_requests
 import tempfile
+import defusedxml
 
 from urllib3 import exceptions as lib_exceptions
 from exchangelib import Credentials, Account, Configuration, Folder, \
@@ -15,9 +16,13 @@ from google.auth.transport.requests import AuthorizedSession
 from google.resumable_media import requests, common
 from google.cloud import kms_v1, storage, pubsub_v1
 from PyPDF2 import PdfFileReader, PdfFileWriter
+from defusedxml import ElementTree as defusedxml_ET
+from xml.etree import ElementTree as ET
 
 # Suppress warnings from exchangelib
 logging.getLogger("exchangelib").setLevel(logging.ERROR)
+
+defusedxml.defuse_stdlib()  # Force parcing by defusedxml
 
 
 class EWSMailMessage:
@@ -102,7 +107,20 @@ class EWSMailMessage:
                             temp_file.close()
                         pdf_count += 1
                     else:
-                        self.write_stream_to_blob(self.bucket_name, file_path, attachment.fp)
+                        try:
+                            xml_tree = ET.ElementTree(defusedxml_ET.fromstring(attachment.content))
+                        except Exception as e:
+                            logging.info(
+                                "Skipped XML '{}' because parsing failed: {}".format(attachment.name, str(e)))
+                            continue
+
+                        xml_temp_file = tempfile.NamedTemporaryFile(mode='w+b', delete=False)  # Open
+                        xml_tree.write(xml_temp_file, encoding="utf-8", method="xml", xml_declaration=True)  # Write
+                        xml_temp_file.close()  # Close
+                        self.write_stream_to_blob(self.bucket_name, file_path, open(xml_temp_file.name, 'rb'))  # Save
+                        xml_temp_file.close()  # Close
+                        os.unlink(xml_temp_file.name)  # Unlink
+
                         xml_count += 1
 
                     message_attachments.append({
