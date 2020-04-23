@@ -16,13 +16,12 @@ from google.auth.transport.requests import AuthorizedSession
 from google.resumable_media import requests, common
 from google.cloud import kms_v1, storage, pubsub_v1
 from PyPDF2 import PdfFileReader, PdfFileWriter
-from defusedxml import ElementTree as defusedxml_ET
-from xml.etree import ElementTree as ET
+from lxml import etree as ET
 
 # Suppress warnings from exchangelib
 logging.getLogger("exchangelib").setLevel(logging.ERROR)
 
-defusedxml.defuse_stdlib()  # Force parcing by defusedxml
+defusedxml.defuse_stdlib()  # Force defusing vulnerable
 
 
 class EWSMailMessage:
@@ -108,7 +107,7 @@ class EWSMailMessage:
                         pdf_count += 1
                     else:
                         try:
-                            xml_tree = ET.ElementTree(defusedxml_ET.fromstring(attachment.content))
+                            xml_tree = ET.ElementTree(ET.fromstring(attachment.content))
                         except Exception as e:
                             logging.info(
                                 "Skipped XML '{}' because parsing failed: {}".format(attachment.name, str(e)))
