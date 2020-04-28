@@ -8,7 +8,6 @@ import datetime
 import requests as py_requests
 import tempfile
 import defusedxml
-import lxml
 
 from urllib3 import exceptions as lib_exceptions
 from exchangelib import Credentials, Account, Configuration, Folder, \
@@ -161,7 +160,7 @@ class EWSMailMessage:
 
     def process_original_message(self):
         message_text_blob = self.bucket.blob('%s/original_email.html' % self.path)
-        message_text_blob.upload_from_string(self.message.unique_body)
+        message_text_blob.upload_from_string(parse_html_content(self.message.unique_body))
 
     def move_message(self, success=True):
         self.message.is_read = True
