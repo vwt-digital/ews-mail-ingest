@@ -148,7 +148,7 @@ class EWSMailMessage:
         for elem in xml_tree.getiterator():
             elem.tag = ET.QName(elem).localname
 
-        return xml_tree
+        return ET.ElementTree(xml_tree)
 
     def write_stream_to_blob(self, bucket_name, path, content):
         with GCSObjectStreamUpload(client=self.storage_client, bucket_name=bucket_name, blob_name=path) as f,\
