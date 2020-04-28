@@ -17,6 +17,7 @@ from google.auth.transport.requests import AuthorizedSession
 from google.resumable_media import requests, common
 from google.cloud import kms_v1, storage, pubsub_v1
 from PyPDF2 import PdfFileReader, PdfFileWriter
+from defusedxml import ElementTree as defusedxml_ET
 from lxml import etree as ET
 from lxml.html.clean import Cleaner
 
@@ -109,7 +110,7 @@ class EWSMailMessage:
                         pdf_count += 1
                     else:
                         try:
-                            xml_tree = ET.ElementTree(ET.fromstring(attachment.content))
+                            xml_tree = self.secure_xml(attachment.content)
                         except Exception as e:
                             logging.info(
                                 "Skipped XML '{}' because parsing failed: {}".format(attachment.name, str(e)))
@@ -141,6 +142,14 @@ class EWSMailMessage:
         self.logger.info("Message has not enough correct files, " +
                          "only {} XML file(s) and {} PDF file(s) are present".format(xml_count, pdf_count))
         return message_attachments, False
+
+    def secure_xml(self, xml_string):
+        safe_xml_tree = defusedxml_ET.fromstring(xml_string)
+        xml_tree = ET.fromstring(defusedxml_ET.tostring(safe_xml_tree))
+        for elem in xml_tree.getiterator():
+            elem.tag = ET.QName(elem).localname
+
+        return xml_tree
 
     def write_stream_to_blob(self, bucket_name, path, content):
         with GCSObjectStreamUpload(client=self.storage_client, bucket_name=bucket_name, blob_name=path) as f,\
