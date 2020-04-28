@@ -8,6 +8,7 @@ import datetime
 import requests as py_requests
 import tempfile
 import defusedxml
+import lxml
 
 from urllib3 import exceptions as lib_exceptions
 from exchangelib import Credentials, Account, Configuration, Folder, \
@@ -17,6 +18,7 @@ from google.resumable_media import requests, common
 from google.cloud import kms_v1, storage, pubsub_v1
 from PyPDF2 import PdfFileReader, PdfFileWriter
 from lxml import etree as ET
+from lxml.html.clean import Cleaner
 
 # Suppress warnings from exchangelib
 logging.getLogger("exchangelib").setLevel(logging.ERROR)
@@ -175,7 +177,7 @@ class EWSMailMessage:
             'subject': self.message.subject,
             'datetime_sent': self.message.datetime_sent.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             'datetime_received': self.message.datetime_received.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'original_email': self.message.unique_body,
+            'original_email': parse_html_content(self.message.unique_body),
             'attachments': attachments
         }
         meta = {'gobits': [message_meta], 'mail': message_data}
@@ -348,6 +350,14 @@ class GCSObjectStreamUpload(object):
 
     def tell(self) -> int:
         return self._read
+
+
+def parse_html_content(html):
+    cleaner = Cleaner()
+    cleaner.javascript = True
+    cleaner.style = True
+
+    return cleaner.clean_html(html)
 
 
 def custom_logger(logger_name):
