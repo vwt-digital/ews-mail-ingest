@@ -7,6 +7,7 @@ import secrets
 import datetime
 import requests as py_requests
 import tempfile
+import defusedxml
 
 from urllib3 import exceptions as lib_exceptions
 from exchangelib import Credentials, Account, Configuration, Folder, \
@@ -15,9 +16,14 @@ from google.auth.transport.requests import AuthorizedSession
 from google.resumable_media import requests, common
 from google.cloud import kms_v1, storage, pubsub_v1
 from PyPDF2 import PdfFileReader, PdfFileWriter
+from defusedxml import ElementTree as defusedxml_ET
+from lxml import etree as ET
+from lxml.html.clean import Cleaner
 
 # Suppress warnings from exchangelib
 logging.getLogger("exchangelib").setLevel(logging.ERROR)
+
+defusedxml.defuse_stdlib()  # Force defusing vulnerable
 
 
 class EWSMailMessage:
@@ -102,7 +108,20 @@ class EWSMailMessage:
                             temp_file.close()
                         pdf_count += 1
                     else:
-                        self.write_stream_to_blob(self.bucket_name, file_path, attachment.fp)
+                        try:
+                            xml_tree = self.secure_xml(attachment.content)
+                        except Exception as e:
+                            logging.info(
+                                "Skipped XML '{}' because parsing failed: {}".format(attachment.name, str(e)))
+                            continue
+
+                        xml_temp_file = tempfile.NamedTemporaryFile(mode='w+b', delete=False)  # Open
+                        xml_tree.write(xml_temp_file, encoding="utf-8", method="xml", xml_declaration=True)  # Write
+                        xml_temp_file.close()  # Close
+                        self.write_stream_to_blob(self.bucket_name, file_path, open(xml_temp_file.name, 'rb'))  # Save
+                        xml_temp_file.close()  # Close
+                        os.unlink(xml_temp_file.name)  # Unlink
+
                         xml_count += 1
 
                     message_attachments.append({
@@ -123,6 +142,14 @@ class EWSMailMessage:
                          "only {} XML file(s) and {} PDF file(s) are present".format(xml_count, pdf_count))
         return message_attachments, False
 
+    def secure_xml(self, xml_string):
+        safe_xml_tree = defusedxml_ET.fromstring(xml_string)
+        xml_tree = ET.fromstring(defusedxml_ET.tostring(safe_xml_tree))
+        for elem in xml_tree.getiterator():
+            elem.tag = ET.QName(elem).localname
+
+        return ET.ElementTree(xml_tree)
+
     def write_stream_to_blob(self, bucket_name, path, content):
         with GCSObjectStreamUpload(client=self.storage_client, bucket_name=bucket_name, blob_name=path) as f,\
                 content as fp:
@@ -133,7 +160,7 @@ class EWSMailMessage:
 
     def process_original_message(self):
         message_text_blob = self.bucket.blob('%s/original_email.html' % self.path)
-        message_text_blob.upload_from_string(self.message.unique_body)
+        message_text_blob.upload_from_string(parse_html_content(self.message.unique_body))
 
     def move_message(self, success=True):
         self.message.is_read = True
@@ -158,7 +185,7 @@ class EWSMailMessage:
             'subject': self.message.subject,
             'datetime_sent': self.message.datetime_sent.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             'datetime_received': self.message.datetime_received.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'original_email': self.message.unique_body,
+            'original_email': parse_html_content(self.message.unique_body),
             'attachments': attachments
         }
         meta = {'gobits': [message_meta], 'mail': message_data}
@@ -331,6 +358,14 @@ class GCSObjectStreamUpload(object):
 
     def tell(self) -> int:
         return self._read
+
+
+def parse_html_content(html):
+    cleaner = Cleaner()
+    cleaner.javascript = True
+    cleaner.style = True
+
+    return cleaner.clean_html(html)
 
 
 def custom_logger(logger_name):
