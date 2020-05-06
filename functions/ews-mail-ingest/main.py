@@ -8,6 +8,7 @@ import datetime
 import requests as py_requests
 import tempfile
 import defusedxml
+from translate_error import TranslateError
 
 from urllib3 import exceptions as lib_exceptions
 from exchangelib import Credentials, Account, Configuration, Folder, \
@@ -57,10 +58,17 @@ class EWSMailMessage:
 
                 self.logger.info('Finished processing of e-mail')
             else:
+                raise TranslateError(
+                            4030,
+                            description="Could not successfully process mail",
+                            function_name="process")
                 self.move_message(False)  # Move and flag message
                 self.logger.info('Finished processing of incorrect e-mail')
-        except Exception as exception:
-            self.logger.exception(exception)
+
+        except TranslateError as e:
+            logging.error(json.dumps(e.properties))
+        except Exception as e:
+            logging.exception(e)
 
     def process_message_attachments(self):
         message_attachments = []
