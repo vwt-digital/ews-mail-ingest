@@ -58,12 +58,12 @@ class EWSMailMessage:
 
                 self.logger.info('Finished processing of e-mail')
             else:
+                self.move_message(False)  # Move and flag message
+                self.logger.info('Finished processing of incorrect e-mail')
                 raise TranslateError(
                             4030,
                             description="Could not successfully process mail",
                             function_name="process")
-                self.move_message(False)  # Move and flag message
-                self.logger.info('Finished processing of incorrect e-mail')
 
         except TranslateError as e:
             logging.error(json.dumps(e.properties))
