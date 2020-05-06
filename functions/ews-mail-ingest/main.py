@@ -8,8 +8,8 @@ import datetime
 import requests as py_requests
 import tempfile
 import defusedxml
+from translate_error import TranslateError
 
-from . import translate_error
 from urllib3 import exceptions as lib_exceptions
 from exchangelib import Credentials, Account, Configuration, Folder, \
     FileAttachment, errors, Version, Build, FaultTolerance
@@ -20,8 +20,6 @@ from PyPDF2 import PdfFileReader, PdfFileWriter
 from defusedxml import ElementTree as defusedxml_ET
 from lxml import etree as ET
 from lxml.html.clean import Cleaner
-
-TranslateError = translate_error.TranslateError
 
 # Suppress warnings from exchangelib
 logging.getLogger("exchangelib").setLevel(logging.ERROR)
