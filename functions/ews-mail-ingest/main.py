@@ -9,6 +9,7 @@ import requests as py_requests
 import tempfile
 import defusedxml
 
+from . import translate_error
 from urllib3 import exceptions as lib_exceptions
 from exchangelib import Credentials, Account, Configuration, Folder, \
     FileAttachment, errors, Version, Build, FaultTolerance
@@ -19,6 +20,8 @@ from PyPDF2 import PdfFileReader, PdfFileWriter
 from defusedxml import ElementTree as defusedxml_ET
 from lxml import etree as ET
 from lxml.html.clean import Cleaner
+
+TranslateError = translate_error.TranslateError
 
 # Suppress warnings from exchangelib
 logging.getLogger("exchangelib").setLevel(logging.ERROR)
@@ -57,10 +60,17 @@ class EWSMailMessage:
 
                 self.logger.info('Finished processing of e-mail')
             else:
+                raise TranslateError(
+                            4030,
+                            description="Could not successfully process mail",
+                            function_name="process")
                 self.move_message(False)  # Move and flag message
                 self.logger.info('Finished processing of incorrect e-mail')
-        except Exception as exception:
-            self.logger.exception(exception)
+
+        except TranslateError as e:
+            logging.error(json.dumps(e.properties))
+        except Exception as e:
+            logging.exception(e)
 
     def process_message_attachments(self):
         message_attachments = []
