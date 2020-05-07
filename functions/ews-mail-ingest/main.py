@@ -141,6 +141,11 @@ class EWSMailMessage:
                 except Exception as exception:
                     self.logger.exception(exception)
                     continue
+            else:
+                self.logger.info(
+                    "Skipped file because '{}' is not of type 'text/xml' or 'application/pdf'".format(
+                        attachment.content_type))
+                continue
 
         if xml_count == 1 and pdf_count > 0:
             self.logger.info("Finished uploading {} of {} attachment(s)".format(uploaded_count, total_count))
