@@ -79,7 +79,8 @@ class EWSMailMessage:
 
         self.logger.info("Started uploading attachments...")
         for attachment in self.message.attachments:
-            if isinstance(attachment, FileAttachment) and attachment.content_type in ['text/xml', 'application/pdf']:
+            if isinstance(attachment, FileAttachment) and \
+               attachment.content_type in ['text/xml', 'application/pdf', 'application/octet-stream']:
                 if attachment.size > 5242880:  # 5MB limit
                     self.logger.info(
                         "Skipped file '{}' because maximum size of 5MB is exceeded".format(attachment.name))
@@ -99,7 +100,8 @@ class EWSMailMessage:
                 try:
                     file_path = '%s/%s' % (self.path, clean_attachment_name)
 
-                    if attachment.content_type == 'application/pdf':
+                    if attachment.content_type in ['application/pdf', 'application/octet-stream'] and \
+                       attachment.name.endswith('.pdf'):
                         writer = PdfFileWriter()
                         with tempfile.TemporaryFile(mode='w+b') as temp_file, attachment.fp as fp:
                             buffer = fp.read(1024)
@@ -143,7 +145,7 @@ class EWSMailMessage:
                     continue
             else:
                 self.logger.info(
-                    "Skipped file because '{}' is not of type 'text/xml' or 'application/pdf'".format(
+                    "Skipped file because '{}' is not of type 'text/xml', 'application/pdf' or application/octet-stream".format(
                         attachment.content_type))
                 continue
 
