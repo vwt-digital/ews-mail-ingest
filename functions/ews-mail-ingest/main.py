@@ -117,7 +117,7 @@ class EWSMailMessage:
                                 self.write_stream_to_blob(self.bucket_name, file_path, open(temp_flat_file.name, 'rb'))
                             temp_file.close()
                         pdf_count += 1
-                    elif attachment.content_type in ['text/xml', 'application/octet-stream'] and \
+                    elif attachment.content_type in ['text/xml', 'application/octet-stream', 'application/xml'] and \
                             attachment.name.endswith('.xml'):
                         try:
                             xml_tree = self.secure_xml(attachment.content)
