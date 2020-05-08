@@ -89,7 +89,7 @@ class EWSMailMessage:
                     self.logger.info(
                         "Skipped XML file '{}' because maximum file of 1 is exceeded".format(attachment.name))
                     continue
-                elif attachment.content_type == 'application/pdf' and pdf_count >= 5:
+                elif attachment.content_type in ['application/pdf', 'application/octet-stream'] and pdf_count >= 5:
                     self.logger.info(
                         "Skipped PDF file '{}' because maximum files of 5 is exceeded".format(attachment.name))
                     continue
@@ -117,7 +117,7 @@ class EWSMailMessage:
                                 self.write_stream_to_blob(self.bucket_name, file_path, open(temp_flat_file.name, 'rb'))
                             temp_file.close()
                         pdf_count += 1
-                    else:
+                    elif attachment.content_type == 'text/xml':
                         try:
                             xml_tree = self.secure_xml(attachment.content)
                         except Exception as e:
@@ -133,6 +133,11 @@ class EWSMailMessage:
                         os.unlink(xml_temp_file.name)  # Unlink
 
                         xml_count += 1
+                    else:
+                        logging.info(
+                            "Skipped file '{}' because content-type '{}' does not match with file extension".format(
+                                attachment.name, attachment.content_type))
+                        continue
 
                     message_attachments.append({
                         'name': clean_attachment_name,
@@ -145,7 +150,7 @@ class EWSMailMessage:
                     continue
             else:
                 self.logger.info(
-                    "Skipped file because '{}' is not of type 'text/xml', 'application/pdf' or application/octet-stream".format(
+                    "Skipped file because '{}' is not of type 'text/xml', 'application/pdf' or 'application/octet-stream'".format(
                         attachment.content_type))
                 continue
 
