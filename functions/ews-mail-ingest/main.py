@@ -58,12 +58,12 @@ class EWSMailMessage:
 
                 self.logger.info('Finished processing of e-mail')
             else:
+                self.move_message(False)  # Move and flag message
+                self.logger.info('Finished processing of incorrect e-mail')
                 raise TranslateError(
                             4030,
                             description="Could not successfully process mail",
                             function_name="process")
-                self.move_message(False)  # Move and flag message
-                self.logger.info('Finished processing of incorrect e-mail')
 
         except TranslateError as e:
             logging.error(json.dumps(e.properties))
@@ -79,7 +79,8 @@ class EWSMailMessage:
 
         self.logger.info("Started uploading attachments...")
         for attachment in self.message.attachments:
-            if isinstance(attachment, FileAttachment) and attachment.content_type in ['text/xml', 'application/pdf']:
+            if isinstance(attachment, FileAttachment) and \
+               attachment.content_type in ['text/xml', 'application/pdf', 'application/octet-stream']:
                 if attachment.size > 5242880:  # 5MB limit
                     self.logger.info(
                         "Skipped file '{}' because maximum size of 5MB is exceeded".format(attachment.name))
@@ -88,7 +89,7 @@ class EWSMailMessage:
                     self.logger.info(
                         "Skipped XML file '{}' because maximum file of 1 is exceeded".format(attachment.name))
                     continue
-                elif attachment.content_type == 'application/pdf' and pdf_count >= 5:
+                elif attachment.content_type in ['application/pdf', 'application/octet-stream'] and pdf_count >= 5:
                     self.logger.info(
                         "Skipped PDF file '{}' because maximum files of 5 is exceeded".format(attachment.name))
                     continue
@@ -99,7 +100,8 @@ class EWSMailMessage:
                 try:
                     file_path = '%s/%s' % (self.path, clean_attachment_name)
 
-                    if attachment.content_type == 'application/pdf':
+                    if attachment.content_type in ['application/pdf', 'application/octet-stream'] and \
+                       attachment.name.endswith('.pdf'):
                         writer = PdfFileWriter()
                         with tempfile.TemporaryFile(mode='w+b') as temp_file, attachment.fp as fp:
                             buffer = fp.read(1024)
@@ -115,7 +117,7 @@ class EWSMailMessage:
                                 self.write_stream_to_blob(self.bucket_name, file_path, open(temp_flat_file.name, 'rb'))
                             temp_file.close()
                         pdf_count += 1
-                    else:
+                    elif attachment.content_type == 'text/xml':
                         try:
                             xml_tree = self.secure_xml(attachment.content)
                         except Exception as e:
@@ -131,6 +133,11 @@ class EWSMailMessage:
                         os.unlink(xml_temp_file.name)  # Unlink
 
                         xml_count += 1
+                    else:
+                        logging.info(
+                            "Skipped file '{}' because content-type '{}' does not match with file extension".format(
+                                attachment.name, attachment.content_type))
+                        continue
 
                     message_attachments.append({
                         'name': clean_attachment_name,
@@ -141,6 +148,11 @@ class EWSMailMessage:
                 except Exception as exception:
                     self.logger.exception(exception)
                     continue
+            else:
+                self.logger.info(
+                    "Skipped file because '{}' is not of type 'text/xml', 'application/pdf' or 'application/octet-stream'".format(
+                        attachment.content_type))
+                continue
 
         if xml_count == 1 and pdf_count > 0:
             self.logger.info("Finished uploading {} of {} attachment(s)".format(uploaded_count, total_count))
