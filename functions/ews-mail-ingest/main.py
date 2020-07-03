@@ -4,12 +4,11 @@ import logging
 import json
 import base64
 import secrets
-import datetime
 import requests as py_requests
 import tempfile
 import defusedxml
-from translate_error import TranslateError
 
+from translate_error import TranslateError
 from urllib3 import exceptions as lib_exceptions
 from exchangelib import Credentials, Account, Configuration, Folder, \
     FileAttachment, errors, Version, Build, FaultTolerance
@@ -20,6 +19,7 @@ from PyPDF2 import PdfFileReader, PdfFileWriter
 from defusedxml import ElementTree as defusedxml_ET
 from lxml import etree as ET
 from lxml.html.clean import Cleaner
+from gobits import Gobits
 
 # Suppress warnings from exchangelib
 logging.getLogger("exchangelib").setLevel(logging.ERROR)
@@ -190,14 +190,6 @@ class EWSMailMessage:
                           (self.folder_processed if success else self.folder_processed_failed))
 
     def process_message_meta(self, attachments):
-        message_meta = {
-            'gcp_project': os.environ.get('GCP_PROJECT', ''),
-            'execution_id': self.request.headers.get('Function-Execution-Id', ''),
-            'execution_type': 'cloud_function',
-            'execution_name': os.environ.get('FUNCTION_NAME', ''),
-            'execution_trigger_type': os.environ.get('FUNCTION_TRIGGER_TYPE', ''),
-            'timestamp': datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        }
 
         message_data = {
             'message_id': self.message.id,
@@ -209,7 +201,9 @@ class EWSMailMessage:
             'original_email': parse_html_content(self.message.unique_body),
             'attachments': attachments
         }
-        meta = {'gobits': [message_meta], 'mail': message_data}
+
+        bits = Gobits(request=self.request)
+        meta = {'gobits': [bits.to_json()], 'mail': message_data}
 
         # Save meta file to bucket
         blob = self.bucket.blob('{}/metadata.json'.format(self.path))
