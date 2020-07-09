@@ -30,19 +30,10 @@ The ews-mail-ingest works as follows:
 7. The e-mail will be marked as ```read``` and moved to the specified mailbox folder
 
 #### Meta-info
-The meta-info object posted to a GCP Pub/Sub topic is defined as described below.
+The meta-info object posted to a GCP Pub/Sub topic is defined as described below. For the gobits field, refer to [this](https://github.com/vwt-digital/gobits) repository.
 ~~~json
 {
-  "gobits": [
-    {
-      "gcp_project": "",
-      "execution_id": "",
-      "execution_type": "",
-      "execution_name": "",
-      "execution_trigger_type": "",
-      "timestamp": ""
-    }
-  ],
+  "gobits": [gobits],
   "mail": {
     "message_id": "",
     "sender": "",
@@ -58,4 +49,3 @@ The meta-info object posted to a GCP Pub/Sub topic is defined as described below
 
 ## License
 This function is licensed under the [GPL-3](https://www.gnu.org/licenses/gpl-3.0.en.html) License
-
