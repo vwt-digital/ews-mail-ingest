@@ -2,11 +2,11 @@ import config
 import os
 import logging
 import json
-import base64
 import secrets
 import requests as py_requests
 import tempfile
 import defusedxml
+import utils
 
 from translate_error import TranslateError
 from urllib3 import exceptions as lib_exceptions
@@ -14,7 +14,7 @@ from exchangelib import Credentials, Account, Configuration, Folder, \
     FileAttachment, errors, Version, Build, FaultTolerance
 from google.auth.transport.requests import AuthorizedSession
 from google.resumable_media import requests, common
-from google.cloud import kms_v1, storage, pubsub_v1
+from google.cloud import storage, pubsub_v1
 from PyPDF2 import PdfFileReader, PdfFileWriter
 from defusedxml import ElementTree as defusedxml_ET
 from lxml import etree as ET
@@ -228,15 +228,12 @@ class EWSMailMessage:
 
 class EWSMailIngest:
     def __init__(self, request):
-        # Decode KMS encrypted password
-        exchange_password_encrypted = base64.b64decode(os.environ['EXCHANGE_PASSWORD_ENCRYPTED'])
-        kms_client = kms_v1.KeyManagementServiceClient()
-        crypto_key_name = kms_client.crypto_key_path_path(os.environ['PROJECT_ID'], 'europe', 'ews-api',
-                                                          'ews-api-credentials')
-        decrypt_response = kms_client.decrypt(crypto_key_name, exchange_password_encrypted)
-        exchange_password = decrypt_response.plaintext.decode("utf-8").replace('\n', '')
 
-        # Initialize connection to Exchange Web Services
+        exchange_password = utils.get_secret(
+            os.environ['PROJECT_ID'],
+            os.environ['SECRET_NAME']
+        )
+
         acc_credentials = Credentials(username=config.EXCHANGE_USERNAME, password=exchange_password)
         version = Version(build=Build(config.EXCHANGE_VERSION['major'], config.EXCHANGE_VERSION['minor']))
         acc_config = Configuration(service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
