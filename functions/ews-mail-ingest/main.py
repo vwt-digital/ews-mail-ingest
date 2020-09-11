@@ -108,7 +108,7 @@ class EWSMailMessage:
                             while buffer:
                                 temp_file.write(buffer)
                                 buffer = fp.read(1024)
-                            reader = PdfFileReader(temp_file)
+                            reader = PdfFileReader(temp_file, strict=False)
                             [writer.addPage(reader.getPage(i)) for i in range(0, reader.getNumPages())]
                             writer.removeLinks()
                             with tempfile.NamedTemporaryFile(mode='w+b', delete=False) as temp_flat_file:
