@@ -391,7 +391,11 @@ def custom_logger(logger_name):
 
 def ews_to_bucket(request):
     if request.method == 'POST':
-        EWSMailIngest(request=request).process()
+        try:
+            EWSMailIngest(request=request).process()
+        except Exception as e:
+            logging.info(f"An exception occurred when processing mail: {str(e)}")
+            return 'Mail ingest failed', 503
 
 
 if __name__ == '__main__':
