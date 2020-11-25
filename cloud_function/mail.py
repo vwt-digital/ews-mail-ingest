@@ -5,9 +5,8 @@ from datetime import datetime
 from typing import List, Any
 from uuid import uuid4
 
-from exchangelib import Credentials, Version, Configuration, Build, Account, FaultTolerance
-
-from config import EXCHANGE_VERSION, EXCHANGE_URL
+from exchangelib import Credentials, Account
+from exchangelib.folders import Messages
 
 # Suppress warnings from exchangelib
 logging.getLogger("exchangelib").setLevel(logging.ERROR)
@@ -19,6 +18,10 @@ class Attachment:
     name: str
     content_type: str
     content_id: str
+
+    # TODO: It's cleaner to move this to a separate subclass.
+    storage_bucket: str
+    storage_filename: str
 
 
 @dataclass
@@ -36,6 +39,14 @@ class Email:
         pass
 
 
+class EmailService:
+    def __init__(self, email_address, *args, **kwargs):
+        pass
+
+    def retrieve_unread_emails(self) -> List[Email]:
+        pass
+
+
 @dataclass
 class ExchangeEmail(Email):
     original_message: Any
@@ -45,55 +56,63 @@ class ExchangeEmail(Email):
         self.original_message.save(update_fields=['is_read'])
 
 
-class EmailService:
-    def __init__(self, email_address, *args, **kwargs):
-        pass
-
-    def retrieve_unread_emails(self) -> List[Email]:
-        pass
-
-
 class EWSEmailService:
+    email_address: str
+    alias: str
     exchange_client: Account
+    folder: Messages
 
-    def __init__(self, email_address, secret_id=None, password=None, *args, **kwargs):
-        # TODO check if secret is supplied through password or secret id.
+    def __init__(self, email_address, password=None, folder=None, alias=None, *args, **kwargs):
+        self.email_address = email_address
+        self.alias = alias
+        credentials = Credentials(username=email_address, password=password)
+        self.exchange_client = Account(email_address, credentials=credentials, autodiscover=True)
 
-        acc_credentials = Credentials(username=email_address, password=password)
-        version = Version(build=Build(EXCHANGE_VERSION['major'], EXCHANGE_VERSION['minor']))
-        acc_config = Configuration(service_endpoint=EXCHANGE_URL, credentials=acc_credentials,
-                                   auth_type='basic', version=version, retry_policy=FaultTolerance(max_wait=300))
-        self.exchange_client = Account(primary_smtp_address=email_address, config=acc_config,
-                                       autodiscover=False, access_type='delegate')
+        if folder is None:
+            self.folder = self.exchange_client.inbox
+        else:
+            self.folder = self.exchange_client.inbox / folder
 
     def retrieve_unread_emails(self) -> List[Email]:
-        if self.exchange_client.inbox:
-            if self.exchange_client.inbox.unread_count > 0:
-                logging.info('Found {} unread e-mail(s)'.format(self.exchange_client.inbox.unread_count))
+        if self.folder:
+            if self.folder.unread_count > 0:
+                logging.info('Found {} unread e-mail(s)'.format(self.folder.unread_count))
 
-                inbox_query = self.exchange_client.inbox.filter(is_read=False) \
+                inbox_query = self.folder.filter(is_read=False) \
                     .order_by('-datetime_received').only('subject', 'sender', 'received_by', 'datetime_sent',
                                                          'datetime_received', 'unique_body', 'attachments')
                 inbox_query.page_size = 2
 
                 unread_mails = []
                 for message in inbox_query.iterator():
-                    attachments = []
+                    if self.alias is None:
+                        received_by = self.email_address
+                    else:
+                        received_by = self.alias
+
+                    attachments = [Attachment(attachment.fp,
+                                              attachment.name,
+                                              attachment.content_type,
+                                              attachment.content_id,
+                                              storage_bucket=None,
+                                              storage_filename=None)
+                                   for attachment in message.attachments
+                                   if not attachment.is_inline]
+
                     email = ExchangeEmail(uuid=uuid4(),
                                           subject=message.subject,
-                                          sender=message.sender,
-                                          receiver=message.received_by,
+                                          sender=str(message.sender),
+                                          receiver=received_by,
                                           time_sent=message.datetime_sent,
-                                          time_received=message.datetime_reveived,
+                                          time_received=message.datetime_received,
                                           body=message.unique_body,
                                           attachments=attachments,
                                           original_message=message)
-
                     unread_mails.append(email)
                 return unread_mails
             else:
                 logging.info('No unread e-mails in mailbox')
         else:
-            raise Exception("Can't find the inbox")
+            raise Exception('Can\'t find the inbox')
 
         return []
