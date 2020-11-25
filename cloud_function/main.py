@@ -17,7 +17,7 @@ def handler(request):
     storage_service = EmailAttachmentStorageService(BUCKET_NAME)
     publish_service = MailPublishService(TOPIC_NAME, request)
 
-    identifier = request.args.get('email', None)
+    identifier = request.args.get('identifier', None)
 
     if identifier is None:
         raise ValueError("No email address specified.")

@@ -1,6 +1,5 @@
 import json
 import logging
-from urllib.parse import urlencode
 
 from gobits import Gobits
 from google.cloud.pubsub_v1 import PublisherClient
@@ -43,8 +42,8 @@ class MailPublishService(PublishService):
         return {
             'mimetype': attachment.content_type,
             'bucket': attachment.storage_bucket,
-            'file_name':  attachment.storage_filename,
-            'full_path': '{}/{}'.format(attachment.storage_bucket, urlencode(attachment.storage_filename))
+            'file_name':  attachment.name,
+            'full_path': attachment.storage_filename
         }
 
     def publish_email(self, email: Email):
