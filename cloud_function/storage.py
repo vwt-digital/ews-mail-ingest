@@ -72,8 +72,6 @@ class GCSObjectStreamUpload(object):
         return data_len
 
     def read(self, chunk_size: int) -> bytes:
-        # I'm not good with efficient no-copy buffering so if this is
-        # wrong or there's a better way to do this let me know! :-)
         to_read = min(chunk_size, self._buffer_size)
         memview = memoryview(self._buffer)
         self._buffer = memview[to_read:].tobytes()
@@ -143,6 +141,8 @@ class EmailAttachmentStorageService(StorageService):
             self._store_file(file=attachment.file,
                              filename=self.get_file_name(email, attachment, identifier),
                              content_type=attachment.content_type)
+            attachment.storage_bucket = self.bucket
+            attachment.storage_filename = self.get_file_name(email, attachment, identifier)
             number_of_attachments = number_of_attachments + 1
 
         return number_of_attachments

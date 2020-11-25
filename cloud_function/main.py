@@ -43,7 +43,7 @@ def handler(request):
             logging.info('Skip publishing of email {} for inbox {}. No supported attachments found.'
                          .format(email.uuid, identifier))
 
-        email.mark_email_as_read(email)
+        # email.mark_email_as_read(email)
         logging.info('Marked email {} as read'.format(email.uuid))
 
 

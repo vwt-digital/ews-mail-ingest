@@ -1,10 +1,12 @@
 import json
 import logging
+from urllib.parse import urlencode
 
 from gobits import Gobits
 from google.cloud.pubsub_v1 import PublisherClient
 from requests import Request
 
+from config import ATTACHMENTS_TO_STORE
 from mail import Email, Attachment
 
 
@@ -21,6 +23,7 @@ class PublishService:
     def _publish_message(self, message_name, message):
         bits = Gobits(request=self.request)
         message_to_publish = {'gobits': [bits.to_json()], message_name: message}
+        print(json.dumps(message_to_publish))
         self.publisher.publish(self.topic_name, bytes(json.dumps(message_to_publish).encode('utf-8')))
 
 
@@ -32,7 +35,8 @@ class MailPublishService(PublishService):
             'recipient': email.receiver,
             'title': email.subject,
             'body': email.body,
-            'attachments': [self._convert_attachment_to_message(attachment) for attachment in email.attachments]
+            'attachments': [self._convert_attachment_to_message(attachment) for attachment in email.attachments
+                            if attachment.content_type in ATTACHMENTS_TO_STORE]
         }
 
     def _convert_attachment_to_message(self, attachment: Attachment):
@@ -40,7 +44,7 @@ class MailPublishService(PublishService):
             'mimetype': attachment.content_type,
             'bucket': attachment.storage_bucket,
             'file_name':  attachment.storage_filename,
-            'full_path': '{}/{}'.format(attachment.storage_bucket, attachment.storage_filename)
+            'full_path': '{}/{}'.format(attachment.storage_bucket, urlencode(attachment.storage_filename))
         }
 
     def publish_email(self, email: Email):
