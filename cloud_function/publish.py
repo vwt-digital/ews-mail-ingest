@@ -10,20 +10,20 @@ from mail import Email, Attachment
 
 
 class PublishService:
-    publisher: PublisherClient
-    topic_name: str
-    request: Request
+    _publisher: PublisherClient
+    _topic_name: str
+    _request: Request
 
     def __init__(self, topic_name: str, request: Request):
-        self.publisher = PublisherClient()
-        self.topic_name = topic_name
-        self.request = request
+        self._publisher = PublisherClient()
+        self._topic_name = topic_name
+        self._request = request
 
     def _publish_message(self, message_name, message):
-        bits = Gobits(request=self.request)
-        message_to_publish = {'gobits': [bits.to_json()], message_name: message}
+        metadata = Gobits.from_request(request=self._request)
+        message_to_publish = {'gobits': [metadata.to_json()], message_name: message}
         print(json.dumps(message_to_publish))
-        self.publisher.publish(self.topic_name, bytes(json.dumps(message_to_publish).encode('utf-8')))
+        self._publisher.publish(self._topic_name, bytes(json.dumps(message_to_publish).encode('utf-8')))
 
 
 class MailPublishService(PublishService):
