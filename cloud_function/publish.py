@@ -21,7 +21,11 @@ class PublishService:
 
     def _publish_message(self, message_name, message):
         metadata = Gobits.from_request(request=self._request)
-        message_to_publish = {'gobits': [metadata.to_json()], message_name: message}
+        try:
+            my_gobits = [metadata.to_json()]
+        except:
+            my_gobits = []
+        message_to_publish = {'gobits': my_gobits, message_name: message}
         print(json.dumps(message_to_publish))
         self._publisher.publish(self._topic_name, bytes(json.dumps(message_to_publish).encode('utf-8')))
 

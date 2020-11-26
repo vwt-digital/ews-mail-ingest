@@ -101,7 +101,7 @@ class EWSEmailService:
 
                     email = ExchangeEmail(uuid=uuid4(),
                                           subject=message.subject,
-                                          sender=str(message.sender),
+                                          sender=str(message.sender.email_address),
                                           receiver=received_by,
                                           time_sent=message.datetime_sent,
                                           time_received=message.datetime_received,
