@@ -33,6 +33,7 @@ class PublishService:
 class MailPublishService(PublishService):
     def _convert_email_to_message(self, email: Email):
         return {
+            'sent_on': email.time_sent.isoformat(),
             'received_on': email.time_received.isoformat(),
             'sender': email.sender,
             'recipient': email.receiver,
