@@ -29,7 +29,7 @@ def handler(request):
 
     email_address = credentials['email']
     password = json.loads(get_secret(PROJECT_ID, credentials['secret_id'])).get('password')
- 
+
     email_service = EWSEmailService(email_address=email_address,
                                     password=password,
                                     folder=credentials.get('folder', None),
@@ -44,7 +44,7 @@ def handler(request):
             logging.info('Skip publishing of email {} for inbox {}. No supported attachments found.'
                          .format(email.uuid, identifier))
 
-        # email.mark_email_as_read(email)
+        email.mark_as_read()
         logging.info('Marked email {} as read'.format(email.uuid))
 
 
