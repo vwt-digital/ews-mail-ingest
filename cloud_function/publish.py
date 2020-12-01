@@ -35,9 +35,9 @@ class MailPublishService(PublishService):
         return {
             'sent_on': email.time_sent.isoformat(),
             'received_on': email.time_received.isoformat(),
+            'subject': email.subject,
             'sender': email.sender,
             'recipient': email.receiver,
-            'title': email.subject,
             'body': email.body,
             'attachments': [self._convert_attachment_to_message(attachment) for attachment in email.attachments
                             if attachment.content_type in ATTACHMENTS_TO_STORE]

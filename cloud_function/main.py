@@ -29,10 +29,11 @@ def handler(request):
 
     email_address = credentials['email']
     password = json.loads(get_secret(PROJECT_ID, credentials['secret_id'])).get('password')
-
+ 
     email_service = EWSEmailService(email_address=email_address,
                                     password=password,
-                                    folder=credentials.get('folder', None))
+                                    folder=credentials.get('folder', None),
+                                    alias=credentials.get('alias', None))
 
     emails = email_service.retrieve_unread_emails()
 
