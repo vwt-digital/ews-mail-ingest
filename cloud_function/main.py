@@ -38,14 +38,19 @@ def handler(request):
     emails = email_service.retrieve_unread_emails()
 
     for email in emails:
-        if storage_service.store_attachments(email, identifier) > 0:
-            publish_service.publish_email(email)
-        else:
-            logging.info('Skip publishing of email {} for inbox {}. No supported attachments found.'
-                         .format(email.uuid, identifier))
+        try:
+            if storage_service.store_attachments(email, identifier) > 0:
+                publish_service.publish_email(email)
+            else:
+                logging.info('Skip publishing of email {} for inbox {}. No supported attachments found.'
+                            .format(email.uuid, identifier))
 
-        email.mark_as_read()
-        logging.info('Marked email {} as read'.format(email.uuid))
+            email.mark_as_read()
+            logging.info('Marked email {} as read'.format(email.uuid))
+        except Exception:
+            logging.error("Error processing email", exc_info=True)
+
+
 
 
 if __name__ == '__main__':

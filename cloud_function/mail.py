@@ -85,30 +85,33 @@ class EWSEmailService:
 
                 unread_mails = []
                 for message in inbox_query.iterator():
-                    if self.alias is None:
-                        received_by = self.email_address
-                    else:
-                        received_by = self.alias
+                    try:
+                        if self.alias is None:
+                            received_by = self.email_address
+                        else:
+                            received_by = self.alias
 
-                    attachments = [Attachment(attachment.fp,
-                                              attachment.name,
-                                              attachment.content_type,
-                                              attachment.content_id,
-                                              storage_bucket=None,
-                                              storage_filename=None)
-                                   for attachment in message.attachments
-                                   if not attachment.is_inline]
+                        attachments = [Attachment(attachment.fp,
+                                                  attachment.name,
+                                                  attachment.content_type,
+                                                  attachment.content_id,
+                                                  storage_bucket=None,
+                                                  storage_filename=None)
+                                       for attachment in message.attachments
+                                       if not attachment.is_inline]
 
-                    email = ExchangeEmail(uuid=uuid4(),
-                                          subject=message.subject,
-                                          sender=str(message.sender.email_address),
-                                          receiver=received_by,
-                                          time_sent=message.datetime_sent,
-                                          time_received=message.datetime_received,
-                                          body=message.unique_body,
-                                          attachments=attachments,
-                                          original_message=message)
-                    unread_mails.append(email)
+                        email = ExchangeEmail(uuid=uuid4(),
+                                              subject=message.subject,
+                                              sender=str(message.sender.email_address),
+                                              receiver=received_by,
+                                              time_sent=message.datetime_sent,
+                                              time_received=message.datetime_received,
+                                              body=message.unique_body,
+                                              attachments=attachments,
+                                              original_message=message)
+                        unread_mails.append(email)
+                    except Exception:
+                        logging.info("Error retrieving email", exc_info=True)
                 return unread_mails
             else:
                 logging.info('No unread e-mails in mailbox')
