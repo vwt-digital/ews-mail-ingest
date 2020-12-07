@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Any
 from uuid import uuid4
 
-from exchangelib import Credentials, Account
+from exchangelib import Credentials, Configuration, Account, FaultTolerance
 from exchangelib.folders import Messages
 
 # Suppress warnings from exchangelib
@@ -66,7 +66,8 @@ class EWSEmailService:
         self.email_address = email_address
         self.alias = alias
         credentials = Credentials(username=email_address, password=password)
-        self.exchange_client = Account(email_address, credentials=credentials, autodiscover=True)
+        ews_config = Configuration(auth_type='basic', retry_policy=FaultTolerance(max_wait=300))
+        self.exchange_client = Account(email_address, credentials=credentials, autodiscover=True, config=ews_config)
 
         if folder is None:
             self.folder = self.exchange_client.inbox
