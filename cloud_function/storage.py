@@ -1,4 +1,5 @@
 import logging
+import mimetypes
 
 from google.auth.transport.requests import AuthorizedSession
 from google.cloud import storage
@@ -134,10 +135,18 @@ class EmailAttachmentStorageService(StorageService):
         number_of_attachments = 0
         for attachment in email.attachments:
             if attachment.content_type not in ATTACHMENTS_TO_STORE:
-                logging.info('Skipped attachment {} for email {}. content-type {} unknown'.format(
-                    attachment.name, email.uuid, attachment.content_type
-                ))
-                continue
+                # Sometimes the mimetype of a file is application/octet-stream,
+                # while the file itself is actually a different type.
+                if attachment.content_type == 'application/octet-stream' \
+                        and mimetypes.guess_type(attachment.name)[0] in ATTACHMENTS_TO_STORE:
+                    attachment.content_type = mimetypes.guess_type(attachment.name)[0]
+                else:
+                    # If the content-type and guessed mimetype are not allowed, we skip downloading this attachment.
+                    logging.info('Skipped attachment {} for email {}. content-type {} unknown'.format(
+                        attachment.name, email.uuid, attachment.content_type
+                    ))
+                    continue
+
             self._store_file(file=attachment.file,
                              filename=self.get_file_name(email, attachment, identifier),
                              content_type=attachment.content_type)
