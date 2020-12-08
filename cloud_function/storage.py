@@ -139,13 +139,19 @@ class EmailAttachmentStorageService(StorageService):
                 # while the file itself is actually a different type.
                 if attachment.content_type == 'application/octet-stream' \
                         and mimetypes.guess_type(attachment.name)[0] in ATTACHMENTS_TO_STORE:
+                    logging.info('Converted attachment {} for email {}. Original content-type {} to {}'.format(
+                        attachment.name, email.uuid, attachment.content_type, mimetypes.guess_type(attachment.name)[0])
+                    )
                     attachment.content_type = mimetypes.guess_type(attachment.name)[0]
+
                 else:
                     # If the content-type and guessed mimetype are not allowed, we skip downloading this attachment.
                     logging.info('Skipped attachment {} for email {}. content-type {} unknown'.format(
                         attachment.name, email.uuid, attachment.content_type
                     ))
                     continue
+
+            logging.info('Storing file {} for email {}'.format(attachment.name, email.uuid))
 
             self._store_file(file=attachment.file,
                              filename=self.get_file_name(email, attachment, identifier),

@@ -38,6 +38,7 @@ def handler(request):
     emails = email_service.retrieve_unread_emails()
 
     for email in emails:
+        logging.info('Processing email {} from sender {}'.format(email.subject, email.sender))
         try:
             if storage_service.store_attachments(email, identifier) > 0:
                 publish_service.publish_email(email)
