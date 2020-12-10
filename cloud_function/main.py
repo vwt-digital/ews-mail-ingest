@@ -4,10 +4,10 @@ import os
 
 import requests
 
+from storage.email_attachment_storage import EmailAttachmentStorageService
 from utils import get_secret
 from config import EMAIL_ADDRESSES, PROJECT_ID, BUCKET_NAME, TOPIC_NAME
 from mail import EWSEmailService
-from storage import EmailAttachmentStorageService
 from publish import MailPublishService
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))

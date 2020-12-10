@@ -1,12 +1,10 @@
 import logging
-import mimetypes
 
 from google.auth.transport.requests import AuthorizedSession
 from google.cloud import storage
 from google.resumable_media import requests, common
 
-from config import ATTACHMENTS_TO_STORE
-from mail import Email, Attachment
+from storage.cleaners import cleaners, FileCleaner
 
 
 class GCSObjectStreamUpload(object):
@@ -93,10 +91,8 @@ class StorageService:
         self.storage_client = storage.Client()
 
     def _store_file(self, file, filename: str, content_type: str = None):
+        file = FileCleaner(file, filename, content_type).clean()
 
-        # bucket = storage_client.get_bucket(self.bucket)
-        # blob = bucket.blob(filename)
-        # blob.content_type = content_type
         with GCSObjectStreamUpload(client=self.storage_client,
                                    bucket_name=self.bucket,
                                    blob_name=filename,
@@ -107,7 +103,7 @@ class StorageService:
                 f.write(buffer)
                 buffer = fp.read(1024)
 
-        print(
+        logging.info(
             "File uploaded to bucket {} with filename {}.".format(
                 self.bucket,
                 filename
@@ -115,49 +111,3 @@ class StorageService:
         )
 
         return
-
-
-class EmailAttachmentStorageService(StorageService):
-    def get_file_name(self, email: Email, attachment: Attachment, identifier: str):
-        return '{identifier}/{year}/{month}/{day}/{uuid}/{file_name}'.format(identifier=identifier,
-                                                                             year=email.time_received.year,
-                                                                             month=email.time_received.month,
-                                                                             day=email.time_received.day,
-                                                                             uuid=email.uuid,
-                                                                             file_name=attachment.name)
-
-    def store_attachments(self, email: Email, identifier: str):
-        """
-        :param email:
-        :param identifier:
-        :return: the number of actual attachments stored.
-        """
-        number_of_attachments = 0
-        for attachment in email.attachments:
-            if attachment.content_type not in ATTACHMENTS_TO_STORE:
-                # Sometimes the mimetype of a file is application/octet-stream,
-                # while the file itself is actually a different type.
-                if attachment.content_type == 'application/octet-stream' \
-                        and mimetypes.guess_type(attachment.name)[0] in ATTACHMENTS_TO_STORE:
-                    logging.info('Converted attachment {} for email {}. Original content-type {} to {}'.format(
-                        attachment.name, email.uuid, attachment.content_type, mimetypes.guess_type(attachment.name)[0])
-                    )
-                    attachment.content_type = mimetypes.guess_type(attachment.name)[0]
-
-                else:
-                    # If the content-type and guessed mimetype are not allowed, we skip downloading this attachment.
-                    logging.info('Skipped attachment {} for email {}. content-type {} unknown'.format(
-                        attachment.name, email.uuid, attachment.content_type
-                    ))
-                    continue
-
-            logging.info('Storing file {} for email {}'.format(attachment.name, email.uuid))
-
-            self._store_file(file=attachment.file,
-                             filename=self.get_file_name(email, attachment, identifier),
-                             content_type=attachment.content_type)
-            attachment.storage_bucket = self.bucket
-            attachment.storage_filename = self.get_file_name(email, attachment, identifier)
-            number_of_attachments = number_of_attachments + 1
-
-        return number_of_attachments
