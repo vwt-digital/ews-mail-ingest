@@ -40,18 +40,12 @@ def handler(request):
     for email in emails:
         logging.info('Processing email {} from sender {}'.format(email.subject, email.sender))
         try:
-            if storage_service.store_attachments(email, identifier) > 0:
-                publish_service.publish_email(email)
-            else:
-                logging.info('Skip publishing of email {} for inbox {}. No supported attachments found.'
-                            .format(email.uuid, identifier))
-
+            storage_service.store_attachments(email, identifier)
+            publish_service.publish_email(email)
             email.mark_as_read()
             logging.info('Marked email {} as read'.format(email.uuid))
         except Exception:
             logging.error("Error processing email", exc_info=True)
-
-
 
 
 if __name__ == '__main__':
