@@ -4,7 +4,7 @@ from google.auth.transport.requests import AuthorizedSession
 from google.cloud import storage
 from google.resumable_media import requests, common
 
-from storage.cleaners import cleaners, FileCleaner
+from storage.cleaners import FileCleaner
 
 
 class GCSObjectStreamUpload(object):
