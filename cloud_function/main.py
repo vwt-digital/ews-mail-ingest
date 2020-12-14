@@ -52,7 +52,7 @@ if __name__ == '__main__':
     mock_request = requests.session()
     mock_request.method = "POST"
     mock_request.args = {
-        'email': 'invoicetest001'
+        'identifier': 'invoicetest242'
     }
     mock_request.data = b'{}'
     handler(mock_request)

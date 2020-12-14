@@ -35,8 +35,7 @@ class FileCleaner:
             writer.removeLinks()
             with tempfile.NamedTemporaryFile(mode='w+b', delete=False) as output_file:
                 writer.write(output_file)
-                output_file.close()
-        return output_file
+        return open(output_file.name, 'rb')
 
     def _clean_xml(self):
         with self.file as f:
@@ -49,7 +48,7 @@ class FileCleaner:
 
         safe_xml_tree = ET.ElementTree(safe_xml_tree)
 
-        with tempfile.NamedTemporaryFile(mode='w+b', delete=False) as cleaned_xml_file: # Open
+        with tempfile.NamedTemporaryFile(mode='w+b', delete=False) as cleaned_xml_file:
             safe_xml_tree.write(cleaned_xml_file, encoding="utf-8", method="xml", xml_declaration=True)
 
         return cleaned_xml_file

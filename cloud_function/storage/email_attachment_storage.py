@@ -41,11 +41,10 @@ class EmailAttachmentStorageService(StorageService):
                     continue
             logging.info('Storing file {} for email {}'.format(attachment.name, email.uuid))
 
-            self._store_file(file=attachment.file,
-                             filename=self.get_file_name(email, attachment, identifier),
-                             content_type=attachment.content_type)
-            attachment.storage_bucket = self.bucket
-            attachment.storage_filename = self.get_file_name(email, attachment, identifier)
+            attachment.storage_filename = self._store_file(file=attachment.file,
+                                                           filename=self.get_file_name(email, attachment, identifier),
+                                                           content_type=attachment.content_type)
+            attachment.storage_bucket = self.bucket_name
             number_of_attachments = number_of_attachments + 1
         logging.info('Stored {} attachments for email {}'.format(number_of_attachments, email.uuid))
 

@@ -1,4 +1,5 @@
 import logging
+from uuid import uuid4
 
 from google.auth.transport.requests import AuthorizedSession
 from google.cloud import storage
@@ -83,21 +84,26 @@ class GCSObjectStreamUpload(object):
 
 
 class StorageService:
-    bucket: str
+    bucket_name: str
     credentials = None
 
-    def __init__(self, bucket: str):
-        self.bucket = bucket
+    def __init__(self, bucket_name: str):
+        self.bucket_name = bucket_name
         self.storage_client = storage.Client()
 
     def _store_file(self, file, filename: str, content_type: str = None):
         file = FileCleaner(file, filename, content_type).clean()
 
+        bucket = self.storage_client.bucket(self.bucket_name)
+        if storage.Blob(bucket=bucket, name=filename).exists(self.storage_client):
+            filename_components = filename.split('.')
+            filename_components.insert(len(filename_components) - 1, str(uuid4()))
+            filename = '.'.join(filename_components)
+
         with GCSObjectStreamUpload(client=self.storage_client,
-                                   bucket_name=self.bucket,
+                                   bucket_name=self.bucket_name,
                                    blob_name=filename,
-                                   content_type=content_type) as f,\
-                file as fp:
+                                   content_type=content_type) as f, file as fp:
             buffer = fp.read(1024)
             while buffer:
                 f.write(buffer)
@@ -105,9 +111,9 @@ class StorageService:
 
         logging.info(
             "File uploaded to bucket {} with filename {}.".format(
-                self.bucket,
+                self.bucket_name,
                 filename
             )
         )
 
-        return
+        return filename
