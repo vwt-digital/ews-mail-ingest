@@ -3,6 +3,7 @@ import logging
 
 from gobits import Gobits
 from google.cloud.pubsub_v1 import PublisherClient
+from lxml.html.clean import Cleaner
 from requests import Request
 
 from config import ATTACHMENTS_TO_STORE
@@ -38,7 +39,7 @@ class MailPublishService(PublishService):
             'subject': email.subject,
             'sender': email.sender,
             'recipient': email.receiver,
-            'body': email.body,
+            'body': self.parse_html_content(email.body),
             'attachments': [self._convert_attachment_to_message(attachment) for attachment in email.attachments
                             if attachment.content_type in ATTACHMENTS_TO_STORE]
         }
@@ -57,3 +58,10 @@ class MailPublishService(PublishService):
         self._publish_message('email', message)
 
         logging.info('Published message for email {}'.format(email.uuid))
+
+    def parse_html_content(self, html):
+        cleaner = Cleaner()
+        cleaner.javascript = True
+        cleaner.style = True
+
+        return cleaner.clean_html(html)

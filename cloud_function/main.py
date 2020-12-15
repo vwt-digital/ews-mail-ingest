@@ -4,10 +4,10 @@ import os
 
 import requests
 
+from storage.email_attachment_storage import EmailAttachmentStorageService
 from utils import get_secret
 from config import EMAIL_ADDRESSES, PROJECT_ID, BUCKET_NAME, TOPIC_NAME
 from mail import EWSEmailService
-from storage import EmailAttachmentStorageService
 from publish import MailPublishService
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
@@ -40,25 +40,19 @@ def handler(request):
     for email in emails:
         logging.info('Processing email {} from sender {}'.format(email.subject, email.sender))
         try:
-            if storage_service.store_attachments(email, identifier) > 0:
-                publish_service.publish_email(email)
-            else:
-                logging.info('Skip publishing of email {} for inbox {}. No supported attachments found.'
-                            .format(email.uuid, identifier))
-
+            storage_service.store_attachments(email, identifier)
+            publish_service.publish_email(email)
             email.mark_as_read()
             logging.info('Marked email {} as read'.format(email.uuid))
         except Exception:
             logging.error("Error processing email", exc_info=True)
 
 
-
-
 if __name__ == '__main__':
     mock_request = requests.session()
     mock_request.method = "POST"
     mock_request.args = {
-        'email': 'invoicetest001'
+        'identifier': 'invoicetest242'
     }
     mock_request.data = b'{}'
     handler(mock_request)
