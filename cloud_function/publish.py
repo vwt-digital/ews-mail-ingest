@@ -36,7 +36,7 @@ class MailPublishService(PublishService):
         return {
             'sent_on': email.time_sent.isoformat(),
             'received_on': email.time_received.isoformat(),
-            'subject': email.subject,
+            'subject': self.parse_html_content(email.subject, links=True),
             'sender': email.sender,
             'recipient': email.receiver,
             'body': self.parse_html_content(email.body),
@@ -59,8 +59,8 @@ class MailPublishService(PublishService):
 
         logging.info('Published message for email {}'.format(email.uuid))
 
-    def parse_html_content(self, html):
-        cleaner = Cleaner()
+    def parse_html_content(self, html, **kwargs):
+        cleaner = Cleaner(**kwargs)
         cleaner.javascript = True
         cleaner.style = True
 
