@@ -1,3 +1,4 @@
+import config
 import logging
 
 from dataclasses import dataclass
@@ -5,7 +6,7 @@ from datetime import datetime
 from typing import List, Any
 from uuid import uuid4
 
-from exchangelib import Credentials, Configuration, Account, FaultTolerance
+from exchangelib import Credentials, Configuration, Account, FaultTolerance, Build, Version
 from exchangelib.folders import Messages
 
 # Suppress warnings from exchangelib
@@ -65,9 +66,12 @@ class EWSEmailService:
     def __init__(self, email_address, password=None, folder=None, alias=None, *args, **kwargs):
         self.email_address = email_address
         self.alias = alias
-        credentials = Credentials(username=email_address, password=password)
-        ews_config = Configuration(auth_type='basic', retry_policy=FaultTolerance(max_wait=300))
-        self.exchange_client = Account(email_address, credentials=credentials, autodiscover=True, config=ews_config)
+        acc_credentials = Credentials(username=email_address, password=password)
+        version = Version(build=Build(config.EXCHANGE_VERSION['major'], config.EXCHANGE_VERSION['minor']))
+        acc_config = Configuration(service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
+                                   auth_type='basic', version=version, retry_policy=FaultTolerance(max_wait=300))
+        self.exchange_client = Account(primary_smtp_address=email_address, config=acc_config,
+                                       autodiscover=False, access_type='delegate')
 
         if folder is None:
             self.folder = self.exchange_client.inbox
