@@ -1,9 +1,9 @@
 import json
 import logging
 
+from bleach import Cleaner
 from gobits import Gobits
 from google.cloud.pubsub_v1 import PublisherClient
-from lxml.html.clean import Cleaner
 from requests import Request
 
 from config import ATTACHMENTS_TO_STORE
@@ -24,7 +24,7 @@ class PublishService:
         metadata = Gobits.from_request(request=self._request)
         try:
             my_gobits = [metadata.to_json()]
-        except:
+        except:  # noqa: E722
             my_gobits = []
         message_to_publish = {'gobits': my_gobits, message_name: message}
         print(json.dumps(message_to_publish))
@@ -36,7 +36,7 @@ class MailPublishService(PublishService):
         return {
             'sent_on': email.time_sent.isoformat(),
             'received_on': email.time_received.isoformat(),
-            'subject': self.parse_html_content(email.subject, links=True),
+            'subject': self.parse_html_content(email.subject, tags=[]),
             'sender': email.sender,
             'recipient': email.receiver,
             'body': self.parse_html_content(email.body),
@@ -48,7 +48,7 @@ class MailPublishService(PublishService):
         return {
             'mimetype': attachment.content_type,
             'bucket': attachment.storage_bucket,
-            'file_name':  attachment.name,
+            'file_name': attachment.name,
             'full_path': attachment.storage_filename
         }
 
@@ -60,8 +60,5 @@ class MailPublishService(PublishService):
         logging.info('Published message for email {}'.format(email.uuid))
 
     def parse_html_content(self, html, **kwargs):
-        cleaner = Cleaner(**kwargs)
-        cleaner.javascript = True
-        cleaner.style = True
-
-        return cleaner.clean_html(html)
+        cleaner = Cleaner(**kwargs, strip=True)
+        return cleaner.clean(html)
