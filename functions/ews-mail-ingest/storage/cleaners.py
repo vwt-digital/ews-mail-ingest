@@ -2,7 +2,8 @@ import logging
 import tempfile
 
 from defusedxml import ElementTree as defusedxml_ET
-from lxml import etree as ET
+# Etree is triggered as a security risk by bandit, but we use defusedxml to sanitize before reading into etree
+from lxml import etree as ET  # nosec
 from PyPDF2 import PdfFileWriter, PdfFileReader
 
 
@@ -41,7 +42,8 @@ class FileCleaner:
         with self.file as f:
             xml_string = f.read()
         safe_xml_tree = defusedxml_ET.fromstring(xml_string)
-        safe_xml_tree = ET.fromstring(defusedxml_ET.tostring(safe_xml_tree))
+        # Etree is triggered as a security risk by bandit, but we use defusedxml to sanitize before reading into etree
+        safe_xml_tree = ET.fromstring(defusedxml_ET.tostring(safe_xml_tree))  # nosec
 
         for elem in safe_xml_tree.getiterator():
             elem.tag = ET.QName(elem).localname
