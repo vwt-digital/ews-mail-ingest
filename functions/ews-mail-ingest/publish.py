@@ -60,5 +60,7 @@ class MailPublishService(PublishService):
         logging.info('Published message for email {}'.format(email.uuid))
 
     def parse_html_content(self, html, **kwargs):
+        if html is None:
+            return None
         cleaner = Cleaner(**kwargs, strip=True)
         return cleaner.clean(html)

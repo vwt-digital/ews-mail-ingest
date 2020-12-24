@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Any
 from uuid import uuid4
 
-from exchangelib import Credentials, Configuration, Account, FaultTolerance, Build, Version
+from exchangelib import Credentials, Configuration, Account, FaultTolerance, Build, Version, FileAttachment, Message
 from exchangelib.folders import Messages
 
 # Suppress warnings from exchangelib
@@ -39,6 +39,9 @@ class Email:
     def mark_as_read(self):
         pass
 
+    def forward(self, recipient, subject=None, body=None):
+        pass
+
 
 class EmailService:
     def __init__(self, email_address, *args, **kwargs):
@@ -50,11 +53,17 @@ class EmailService:
 
 @dataclass
 class ExchangeEmail(Email):
-    original_message: Any
+    original_message: Message
 
     def mark_as_read(self):
         self.original_message.is_read = True
         self.original_message.save(update_fields=['is_read'])
+
+    def forward(self, recipient, subject=None, body=''):
+        if subject is None:
+            subject = 'Fwd: {}'.format(self.subject)
+
+        self.original_message.forward(subject, body, [recipient])
 
 
 class EWSEmailService:
@@ -71,7 +80,7 @@ class EWSEmailService:
         acc_config = Configuration(service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
                                    auth_type='basic', version=version, retry_policy=FaultTolerance(max_wait=300))
         self.exchange_client = Account(primary_smtp_address=email_address, config=acc_config,
-                                       autodiscover=False, access_type='delegate')
+                                       autodiscover=True, access_type='delegate')
 
         if folder is None:
             self.folder = self.exchange_client.inbox
@@ -103,7 +112,10 @@ class EWSEmailService:
                                                   storage_bucket=None,
                                                   storage_filename=None)
                                        for attachment in message.attachments
-                                       if not attachment.is_inline]
+                                       # This line filters any attachments that do not have file attached to them
+                                       # Attachments can also be messages or exchange items.
+                                       # See https://github.com/ecederstrand/exchangelib/issues/335
+                                       if not attachment.is_inline and isinstance(attachment, FileAttachment)]
 
                         email = ExchangeEmail(uuid=uuid4(),
                                               subject=message.subject,
@@ -116,7 +128,7 @@ class EWSEmailService:
                                               original_message=message)
                         unread_mails.append(email)
                     except Exception:
-                        logging.info("Error retrieving email", exc_info=True)
+                        logging.error("Error retrieving email", exc_info=True)
                 return unread_mails
             else:
                 logging.info('No unread e-mails in mailbox')
