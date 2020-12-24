@@ -45,15 +45,18 @@ def handler(request):
             email.mark_as_read()
             logging.info('Marked email {} as read'.format(email.uuid))
         except Exception:
-            logging.info("Error processing email '{}' in mailbox {}. Forwarding to {}".format(email.subject,
-                                                                                              email_address,
-                                                                                              ERROR_EMAIL_ADDRESS),
+            logging.info("Error processing email '{}' in mailbox {}. Forwarding to {}"
+                         .format(email.subject,
+                                 credentials.get('alias', email_address),
+                                 ERROR_EMAIL_ADDRESS),
                          exc_info=True)
 
             email.forward(ERROR_EMAIL_ADDRESS,
                           None,
                           'Er is een fout opgetreden bij het verwerken van onderstaande email.\n' +
-                          'De email is niet verzonden naar basware.')
+                          'Bijgevoegde factuur kon niet verwerkt worden.\n' +
+                          'De email is niet verzonden naar Basware.')
+            email.mark_as_read()
 
 
 if __name__ == '__main__':
