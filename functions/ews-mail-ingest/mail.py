@@ -1,5 +1,6 @@
 import config
 import logging
+import retry
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -75,17 +76,22 @@ class EWSEmailService:
     def __init__(self, email_address, password=None, folder=None, alias=None, *args, **kwargs):
         self.email_address = email_address
         self.alias = alias
-        acc_credentials = Credentials(username=email_address, password=password)
-        version = Version(build=Build(config.EXCHANGE_VERSION['major'], config.EXCHANGE_VERSION['minor']))
-        acc_config = Configuration(service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
-                                   auth_type='basic', version=version, retry_policy=FaultTolerance(max_wait=300))
-        self.exchange_client = Account(primary_smtp_address=email_address, config=acc_config,
-                                       autodiscover=True, access_type='delegate')
+
+        self.initialize_exchange_client(password)
 
         if folder is None:
             self.folder = self.exchange_client.inbox
         else:
             self.folder = self.exchange_client.inbox / folder
+
+    @retry(tries=10, sleep=30, logger=None)
+    def initialize_exchange_client(self, password=None):
+        acc_credentials = Credentials(username=self.email_address, password=password)
+        version = Version(build=Build(config.EXCHANGE_VERSION['major'], config.EXCHANGE_VERSION['minor']))
+        acc_config = Configuration(service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
+                                   auth_type='basic', version=version, retry_policy=FaultTolerance(max_wait=300))
+        self.exchange_client = Account(primary_smtp_address=self.email_address, config=acc_config,
+                                       autodiscover=True, access_type='delegate')
 
     def retrieve_unread_emails(self) -> List[Email]:
         if self.folder:
