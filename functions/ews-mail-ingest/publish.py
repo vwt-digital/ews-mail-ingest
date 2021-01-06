@@ -33,16 +33,27 @@ class PublishService:
 
 class MailPublishService(PublishService):
     def _convert_email_to_message(self, email: Email):
+        if ATTACHMENTS_TO_STORE:
+            return {
+                'sent_on': email.time_sent.isoformat(),
+                'received_on': email.time_received.isoformat(),
+                'subject': self.parse_html_content(email.subject, tags=[]),
+                'sender': email.sender,
+                'recipient': email.receiver,
+                'body': self.parse_html_content(email.body),
+                'attachments': [self._convert_attachment_to_message(attachment) for attachment in email.attachments
+                                if attachment.content_type in ATTACHMENTS_TO_STORE]
+            }
+
         return {
-            'sent_on': email.time_sent.isoformat(),
-            'received_on': email.time_received.isoformat(),
-            'subject': self.parse_html_content(email.subject, tags=[]),
-            'sender': email.sender,
-            'recipient': email.receiver,
-            'body': self.parse_html_content(email.body),
-            'attachments': [self._convert_attachment_to_message(attachment) for attachment in email.attachments
-                            if attachment.content_type in ATTACHMENTS_TO_STORE]
-        }
+                'sent_on': email.time_sent.isoformat(),
+                'received_on': email.time_received.isoformat(),
+                'subject': self.parse_html_content(email.subject, tags=[]),
+                'sender': email.sender,
+                'recipient': email.receiver,
+                'body': self.parse_html_content(email.body),
+                'attachments': []
+            }
 
     def _convert_attachment_to_message(self, attachment: Attachment):
         return {
