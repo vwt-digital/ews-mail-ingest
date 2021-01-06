@@ -1,3 +1,6 @@
+from exchangelib.errors import AutoDiscoverFailed, RateLimitError, ErrorServerBusy
+from urllib3.exceptions import ReadTimeoutError
+
 import config
 import logging
 from retry import retry
@@ -84,7 +87,8 @@ class EWSEmailService:
         else:
             self.folder = self.exchange_client.inbox / folder
 
-    @retry(tries=10, delay=30, logger=None)
+    @retry(exceptions=(AutoDiscoverFailed, RateLimitError, ErrorServerBusy, ReadTimeoutError),
+           tries=10, delay=30, logger=None)
     def initialize_exchange_client(self, password=None):
         acc_credentials = Credentials(username=self.email_address, password=password)
         version = Version(build=Build(config.EXCHANGE_VERSION['major'], config.EXCHANGE_VERSION['minor']))
