@@ -33,7 +33,7 @@ The ```config.py``` file (see [config.example.py](config/config.example.py) for 
     }
 3. Make sure the GCP-project and Cloud Builder accounts have access to write to the specific GCS Bucket and GCP Pub/Sub topic
 4. Deploy the function to GCP as a HTTP triggered function as shown in the [cloudbuild.example.yaml](config/cloudbuild.example.yaml)
-5. Deploy a GCP Cloud Scheduler to call the function as shown in the [cloudbuild.example.yaml](config/cloudbuild.example.yaml). For each email in EMAIL_ADDRESSES, you should schedule a function, passing the key in the dictionary as a GET argument. You can also use [schedule_email_address_functions.sh]([schedule_email_address_functions.sh) to do this for you. 
+5. Deploy a GCP Cloud Scheduler to call the function as shown in the [cloudbuild.example.yaml](config/cloudbuild.example.yaml). For each email in EMAIL_ADDRESSES, you should schedule a function, passing the key in the dictionary as a GET argument. You can also use [schedule_email_address_functions.sh](config/schedule_email_address_functions.sh) to do this for you. [cloudbuild.example.yaml](config/cloudbuild.example.yaml) for an example usage of this script.
 
 ## Function
 The ews-mail-ingest works as follows:
