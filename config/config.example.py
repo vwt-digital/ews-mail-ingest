@@ -25,4 +25,7 @@ TOPIC_NAME = '<TOPIC_NAME>'
 
 ATTACHMENTS_TO_STORE = ['application/pdf']
 
+ALLOWED_HTML_BODY_TAGS = ['html-tag1', 'html-tag2']
+
 ERROR_EMAIL_ADDRESS = 'support@vwtelecom.com'
+ERROR_EMAIL_MESSAGE = 'This is an error message'

@@ -1,12 +1,12 @@
 import json
 import logging
 
-from bleach import Cleaner
+from bleach import Cleaner, sanitizer
 from gobits import Gobits
 from google.cloud.pubsub_v1 import PublisherClient
 from requests import Request
 
-from config import ATTACHMENTS_TO_STORE
+from config import ATTACHMENTS_TO_STORE, ALLOWED_HTML_BODY_TAGS
 from mail import Email, Attachment
 
 
@@ -33,6 +33,8 @@ class PublishService:
 
 class MailPublishService(PublishService):
     def _convert_email_to_message(self, email: Email):
+        allowed_html_body_tags = sanitizer.ALLOWED_TAGS + ALLOWED_HTML_BODY_TAGS
+
         if ATTACHMENTS_TO_STORE:
             return {
                 'sent_on': email.time_sent.isoformat(),
@@ -40,7 +42,7 @@ class MailPublishService(PublishService):
                 'subject': self.parse_html_content(email.subject, tags=[]),
                 'sender': email.sender,
                 'recipient': email.receiver,
-                'body': self.parse_html_content(email.body),
+                'body': self.parse_html_content(email.body, tags=allowed_html_body_tags),
                 'attachments': [self._convert_attachment_to_message(attachment) for attachment in email.attachments
                                 if attachment.content_type in ATTACHMENTS_TO_STORE]
             }
@@ -51,7 +53,7 @@ class MailPublishService(PublishService):
                 'subject': self.parse_html_content(email.subject, tags=[]),
                 'sender': email.sender,
                 'recipient': email.receiver,
-                'body': self.parse_html_content(email.body),
+                'body': self.parse_html_content(email.body, tags=allowed_html_body_tags),
                 'attachments': []
             }
 
