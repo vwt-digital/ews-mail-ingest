@@ -1,0 +1,75 @@
+---
+timeout: 1800s
+steps:
+  # Clone ews-mail-ingest
+  - name: 'gcr.io/cloud-builders/git'
+    args:
+      - 'clone'
+      - '--branch=${BRANCH_NAME}'
+      - 'https://github.com/vwt-digital/ews-mail-ingest.git'
+  # Deploy data catalog
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        git clone --branch=${BRANCH_NAME} https://github.com/vwt-digital/dcat-deploy.git
+        dcat-deploy/deploy_dcat_gcp.sh config/${PROJECT_ID}/data_catalog.json \
+          ${PROJECT_ID} ${BRANCH_NAME} "" \
+          ${PROJECT_ID}@appspot.gserviceaccount.com
+    # Copy config
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        cp -r ews-mail-ingest/functions/ews-mail-ingest prepareconfig
+        cp config/${PROJECT_ID}/config.py prepareconfig/config.py
+        cp ews-mail-ingest/schedule_email_address_functions.sh prepareconfig/schedule_email_address_functions.sh
+        cp ews-mail-ingest/unschedule_email_address_functions.sh prepareconfig/unschedule_email_address_functions.sh
+        cd prepareconfig
+  # Run SAST
+  - name: 'eu.gcr.io/vwt-p-gew1-dat-cloudbuilders/cloudbuilder-sast'
+    id: 'SAST scan for ews-mail-ingest'
+    args: ['--target', '.']
+    dir: 'prepareconfig'
+  # Deploy mail-ingest function
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        gcloud functions deploy ${PROJECT_ID}-mail-ingest-func \
+          --entry-point=handler \
+          --runtime=python37 \
+          --trigger-http \
+          --project=${PROJECT_ID} \
+          --region=europe-west1 \
+          --set-env-vars=PROJECT_ID=${PROJECT_ID} \
+          --memory=256MB \
+          --timeout=540
+    dir: 'prepareconfig'
+  # Protect mail-ingest function
+  # yamllint disable rule:line-length
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo '{ "bindings": [ { "members": [ "serviceAccount:${PROJECT_ID}@appspot.gserviceaccount.com" ], "role": "roles/cloudfunctions.invoker" } ] }' > ingest_func_permissions.json
+        gcloud beta functions set-iam-policy ${PROJECT_ID}-mail-ingest-func --region=europe-west1 --project=${PROJECT_ID} ingest_func_permissions.json
+  # yamllint enable rule:line-length
+  # Delete schedule jobs for recreation
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args: ['./unschedule_email_address_functions.sh']
+    env:
+      - 'PROJECT_ID=$PROJECT_ID'
+    dir: 'prepareconfig'
+    # (Re)create a scheduled job for each email inbox
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args: ['./schedule_email_address_functions.sh']
+    env:
+      - 'PROJECT_ID=$PROJECT_ID'
+    dir: 'prepareconfig'
