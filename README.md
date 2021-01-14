@@ -10,11 +10,10 @@ The ```config.py``` file (see [config.example.py](config/config.example.py) for 
 1. Make sure a ```config.py``` file exists within the function directory, based on the [config.example.py](config/config.example.py), with the correct configuration:
     ~~~
     EXCHANGE_URL = The Exchange service endpoint for the mailbox
-    EXCHANGE_USERNAME = Username used to login
     EXCHANGE_VERSION = An object containing the 'major' and 'minor' Exchange server versions
     TOPIC_PROJECT_ID = The GCP project which houses the Pub/Sub topic defined next
     TOPIC_NAME = The GCP Pub/Sub topic all processed e-mail meta-info will be posted to
-    GCP_BUCKET_NAME = The bucket name where the e-mail attachments (if there are any) will be uploaded to
+    BUCKET_NAME = The (Google Cloud Platform) bucket name where the e-mail attachments (if there are any) will be uploaded to
     ATTACHMENTS_TO_STORE = List of possible mime-types for e-mail attachments. These mimetypes determine which type of files will be stored in the associated bucket. Unknown mime-types will be ignored.
     ALLOWED_HTML_BODY_TAGS = tags that should not be filtered out of the body of the (html) e-mail
     ERROR_EMAIL_ADDRESS = E-mail address where an error message will be send to if an e-mail cannot be send
@@ -22,7 +21,7 @@ The ```config.py``` file (see [config.example.py](config/config.example.py) for 
     EMAIL_ADDRESSES = A dictionary containing mailboxes to be read by the mailingest function. Each mailbox should contain a secret_id of the secret contained in the secret manager, and the email. Optionally an alias field can be added (ews-mail-ingest will publish emails as if they were received by the alias.), as well as a folder field, which will instruct ews-mail-ingest to read a different folder than the default inbox. (Subfolders can be defined with backslashes. 'inbox/today' is a valid folder.)
     ~~~
 
-    If no attachments are ever send along with the email, ```GCP_BUCKET_NAME``` should be an empty string and ```ATTACHMENTS_TO_STORE```
+    If no attachments are ever send along with the email, ```BUCKET_NAME``` should be an empty string and ```ATTACHMENTS_TO_STORE```
     should be an empty list.
 
     If no other body tags should be allowed than the standard ones used in [bleach Cleaner](https://bleach.readthedocs.io/en/latest/clean.html#allowed-attributes-attributes), ```ALLOWED_HTML_BODY_TAGS``` can be an empty list.

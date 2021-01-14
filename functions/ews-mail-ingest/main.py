@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 
@@ -30,7 +29,7 @@ def handler(request):
         raise ValueError("No credentials found for given email address.")
 
     email_address = credentials['email']
-    password = json.loads(get_secret(PROJECT_ID, credentials['secret_id'])).get('password')
+    password = get_secret(PROJECT_ID, credentials['secret_id'])
 
     email_service = EWSEmailService(email_address=email_address,
                                     password=password,
