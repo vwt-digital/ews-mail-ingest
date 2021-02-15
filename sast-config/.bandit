@@ -1,2 +1,0 @@
-[bandit]
-exclude = functions/ews-mail-ingest/main.py
