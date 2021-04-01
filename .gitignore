@@ -1,6 +1,7 @@
-config.py
+*config.py
 *.enc
 startup.sh
+main-test.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
