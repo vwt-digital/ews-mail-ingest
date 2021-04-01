@@ -27,7 +27,6 @@ class PublishService:
         except:  # noqa: E722
             my_gobits = []
         message_to_publish = {"gobits": my_gobits, message_name: message}
-        print(json.dumps(message_to_publish))
         self._publisher.publish(
             self._topic_name, bytes(json.dumps(message_to_publish).encode("utf-8"))
         )
