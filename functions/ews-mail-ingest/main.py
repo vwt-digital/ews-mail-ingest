@@ -2,6 +2,8 @@ import logging
 import os
 
 import requests
+from requests.exceptions import ConnectionError
+from retry import retry
 
 from config import (BUCKET_NAME, EMAIL_ADDRESSES, ERROR_EMAIL_ADDRESS,
                     ERROR_EMAIL_MESSAGE, PROJECT_ID, TOPIC_NAME)
@@ -11,6 +13,20 @@ from storage.email_attachment_storage import EmailAttachmentStorageService
 from utils import get_secret
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
+
+
+@retry(ConnectionError, tries=3, delay=2, logger=None, backoff=2)
+def publish_and_mark(
+    storage_service: EmailAttachmentStorageService,
+    publish_service: MailPublishService,
+    email,
+    identifier,
+):
+    if storage_service:
+        storage_service.store_attachments(email, identifier)
+    publish_service.publish_email(email)
+    email.mark_as_read()
+    logging.info("Marked email {} as read".format(email.uuid))
 
 
 def handler(request):
@@ -46,11 +62,7 @@ def handler(request):
             "Processing email {} from sender {}".format(email.subject, email.sender)
         )
         try:
-            if storage_service:
-                storage_service.store_attachments(email, identifier)
-            publish_service.publish_email(email)
-            email.mark_as_read()
-            logging.info("Marked email {} as read".format(email.uuid))
+            publish_and_mark(storage_service, publish_service, email, identifier)
         except Exception as e:
             if ERROR_EMAIL_ADDRESS:
                 logging.info(
