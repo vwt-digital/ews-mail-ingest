@@ -33,7 +33,14 @@ class FileCleaner:
         pdf_stream = io.BytesIO()
 
         with self.file as input_file:
-            pdf = Pdf.open(input_file)
+            # File is some sort of EWS attachment.fp object that needs to be buffered.
+            # TODO: Prebuffer this before passing it along, please.
+            buffer = input_file.read(1024)
+            while buffer:
+                pdf_stream.write(buffer)
+                buffer = input_file.read(1024)
+
+            pdf = Pdf.open(buffer)
             pdf.flatten_annotations()
             pdf.save(pdf_stream)
 
