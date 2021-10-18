@@ -1,3 +1,4 @@
+import io
 import logging
 import tempfile
 import warnings
@@ -6,7 +7,7 @@ from PyPDF2.utils import PdfReadWarning
 from defusedxml import ElementTree as defusedxml_ET
 # Etree is triggered as a security risk by bandit, but we use defusedxml to sanitize before reading into etree
 from lxml import etree as ET  # nosec
-from PyPDF2 import PdfFileWriter, PdfFileReader
+from pikepdf import Pdf
 
 warnings.simplefilter('ignore', PdfReadWarning)
 
@@ -29,18 +30,14 @@ class FileCleaner:
         pass
 
     def _clean_pdf(self):
-        writer = PdfFileWriter()
-        with tempfile.TemporaryFile(mode='w+b') as temp_file, self.file as input_file:
-            buffer = input_file.read(1024)
-            while buffer:
-                temp_file.write(buffer)
-                buffer = input_file.read(1024)
-            reader = PdfFileReader(temp_file, strict=False, warndest=tempfile.TemporaryFile(), overwriteWarnings=True)
-            [writer.addPage(reader.getPage(i)) for i in range(0, reader.getNumPages())]
-            writer.removeLinks()
-            with tempfile.NamedTemporaryFile(mode='w+b', delete=False) as output_file:
-                writer.write(output_file)
-        return open(output_file.name, 'rb')
+        pdf_stream = io.BytesIO()
+
+        with self.file as input_file:
+            pdf = Pdf.open(input_file)
+            pdf.flatten_annotations()
+            pdf.save(pdf_stream)
+
+        return pdf_stream
 
     def _clean_xml(self):
         with self.file as f:
