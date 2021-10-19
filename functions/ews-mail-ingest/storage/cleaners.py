@@ -44,6 +44,7 @@ class FileCleaner:
             pdf = Pdf.open(pdf_byte_stream)
             pdf.flatten_annotations()
             pdf.save(pdf_content_stream)
+            pdf_content_stream.seek(0)  # Setting data start at 0
 
         return pdf_content_stream
 
