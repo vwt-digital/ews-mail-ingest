@@ -30,23 +30,25 @@ class FileCleaner:
         pass
 
     def _clean_pdf(self):
-        pdf_content_stream = io.BytesIO()
-
+        # The file object needs to be buffered according to standards:
+        # https://ecederstrand.github.io/exchangelib/#attachments
+        input_stream = io.BytesIO()
         with self.file as input_file:
-            # File is some sort of EWS attachment.fp object that needs to be buffered.
-            # TODO: Prebuffer this before passing it along, please.
-            pdf_byte_stream = io.BytesIO()
             buffer = input_file.read(1024)
             while buffer:
-                pdf_byte_stream.write(buffer)
+                input_stream.write(buffer)
                 buffer = input_file.read(1024)
+            input_stream.flush()  # Flush all data from BytesIO buffer to stream.
+            input_stream.seek(0)  # Setting stream to start from beginning (for later reading).
 
-            pdf = Pdf.open(pdf_byte_stream)
-            pdf.flatten_annotations()
-            pdf.save(pdf_content_stream)
-            pdf_content_stream.seek(0)  # Setting data start at 0
+        output_stream = io.BytesIO()
+        with input_stream as ips, Pdf.open(ips) as pdf:
+            pdf.flatten_annotations()  # Cleaning PDF (removing URI's, burning in filled in forms, etc.)
+            pdf.save(output_stream)  # Saving PDF object to the output stream.
+            output_stream.flush()
+            output_stream.seek(0)
 
-        return pdf_content_stream
+        return output_stream
 
     def _clean_xml(self):
         with self.file as f:
