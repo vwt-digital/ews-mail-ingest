@@ -715,9 +715,9 @@ webencodings==0.5.1 \
     # via
     #   -r requirements.in
     #   bleach
-werkzeug==2.0.2
-    # No hash, because gobits does not know what it is talking about.
-
+werkzeug==2.0.2 \
+    --hash=sha256:63d3dc1cf60e7b7e35e97fa9861f7397283b75d765afcaefd993d6046899de8f \
+    --hash=sha256:aa2bb6fc8dee8d6c504c0ac1e7f5f7dc5810a9903e793b6f715a9f015bdadb9a
 # The following packages are considered to be unsafe in a requirements file:
 setuptools==62.6.0 \
     --hash=sha256:990a4f7861b31532871ab72331e755b5f14efbe52d336ea7f6118144dd478741 \
