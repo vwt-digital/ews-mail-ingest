@@ -27,9 +27,10 @@ class PublishService:
         except:  # noqa: E722
             my_gobits = []
         message_to_publish = {"gobits": my_gobits, message_name: message}
-        self._publisher.publish(
+        future = self._publisher.publish(
             self._topic_name, bytes(json.dumps(message_to_publish).encode("utf-8"))
         )
+        logging.info(f"Published email with ID {message['subject']}: {future.result()}")
 
 
 class MailPublishService(PublishService):
