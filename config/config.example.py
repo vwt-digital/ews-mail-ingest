@@ -17,7 +17,7 @@ EMAIL_ADDRESSES = {
         'email': 'inbox2@vwtelecom.com',
         'folder': '<FOLDER_NAME_HERE>',
         'client_id': '<APP_REGISTRATION_CLIENT_ID>',
-        'secret_id': '<APP_REGISTRATION_SECRET_MANAGER_ID_HERE>',
+        'client_secret_id': '<APP_REGISTRATION_SECRET_MANAGER_ID_HERE>',
         'tenant_id': '<APP_REGISTRATION_TENANT_ID>'
     }
 }
