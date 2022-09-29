@@ -12,7 +12,7 @@ decorator==5.0.9
 defusedxml==0.7.1
 dnspython==2.1.0
 exchangelib==4.1.0
-gobits==1.0.8
+gobits==1.0.9
 google-api-core==1.29.0
 google-auth==1.28.0
 google-cloud-core==1.6.0
@@ -56,4 +56,4 @@ tzdata==2021.1
 tzlocal==2.1
 urllib3==1.26.5
 webencodings==0.5.1
-Werkzeug==1.0.1
+Werkzeug==2.0.2
