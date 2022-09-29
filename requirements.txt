@@ -52,6 +52,6 @@ typing-extensions==3.7.4.3
 typing-inspect==0.6.0
 tzdata==2020.4
 tzlocal==2.1
-urllib3==1.26.2
+urllib3==1.26.5
 webencodings==0.5.1
 Werkzeug==1.0.1
