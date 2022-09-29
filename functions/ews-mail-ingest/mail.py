@@ -11,7 +11,7 @@ from typing import List, Any
 from uuid import uuid4
 
 from exchangelib import Credentials, Configuration, Account, FaultTolerance, Build, Version, FileAttachment, Message, \
-    OAuth2Credentials
+    OAuth2Credentials, OAUTH2, BASIC
 from exchangelib.folders import Messages
 
 # Suppress warnings from exchangelib
@@ -105,10 +105,12 @@ class EWSEmailService:
             acc_credentials = OAuth2Credentials(client_id, client_secret, tenant_id)
         else:
             acc_credentials = Credentials(username=self.email_address, password=password)
+        credentials_type = OAUTH2 if client_id is not None else BASIC
 
         version = Version(build=Build(config.EXCHANGE_VERSION['major'], config.EXCHANGE_VERSION['minor']))
         acc_config = Configuration(service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
-                                   auth_type='basic', version=version, retry_policy=FaultTolerance(max_wait=300))
+                                   auth_type=credentials_type, version=version,
+                                   retry_policy=FaultTolerance(max_wait=300))
         self.exchange_client = Account(primary_smtp_address=self.email_address, config=acc_config,
                                        autodiscover=True, access_type='delegate')
 
