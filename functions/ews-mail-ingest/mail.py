@@ -15,7 +15,7 @@ from exchangelib import Credentials, Configuration, Account, FaultTolerance, Bui
 from exchangelib.folders import Messages
 
 # Suppress warnings from exchangelib
-logging.getLogger("exchangelib").setLevel(logging.DEBUG)
+logging.getLogger("exchangelib").setLevel(logging.WARN)
 
 
 @dataclass
