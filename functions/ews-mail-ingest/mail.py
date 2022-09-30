@@ -11,7 +11,7 @@ from typing import List, Any
 from uuid import uuid4
 
 from exchangelib import Credentials, Configuration, Account, FaultTolerance, Build, Version, FileAttachment, Message, \
-    OAuth2Credentials, OAUTH2, BASIC
+    OAuth2Credentials, OAUTH2, BASIC, IMPERSONATION
 from exchangelib.folders import Messages
 
 # Suppress warnings from exchangelib
@@ -111,8 +111,9 @@ class EWSEmailService:
         acc_config = Configuration(service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
                                    auth_type=credentials_type, version=version,
                                    retry_policy=FaultTolerance(max_wait=300))
-        self.exchange_client = Account(primary_smtp_address=self.email_address, config=acc_config,
-                                       autodiscover=True, access_type='delegate')
+        self.exchange_client = Account(primary_smtp_address=self.email_address, credentials=acc_credentials,
+                                       config=acc_config,
+                                       autodiscover=True, access_type=IMPERSONATION)
 
     def retrieve_unread_emails(self) -> List[Email]:
         if self.folder:
