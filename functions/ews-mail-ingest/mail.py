@@ -15,7 +15,7 @@ from exchangelib import Credentials, Configuration, Account, FaultTolerance, Bui
 from exchangelib.folders import Messages
 
 # Suppress warnings from exchangelib
-logging.getLogger("exchangelib").setLevel(logging.ERROR)
+logging.getLogger("exchangelib").setLevel(logging.DEBUG)
 
 
 @dataclass
@@ -111,9 +111,8 @@ class EWSEmailService:
         acc_config = Configuration(service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
                                    auth_type=credentials_type, version=version,
                                    retry_policy=FaultTolerance(max_wait=300))
-        self.exchange_client = Account(primary_smtp_address=self.email_address, credentials=acc_credentials,
-                                       config=acc_config,
-                                       autodiscover=True, access_type=IMPERSONATION)
+        self.exchange_client = Account(primary_smtp_address=self.email_address, config=acc_config,
+                                       credentials=acc_credentials, access_type=IMPERSONATION)
 
     def retrieve_unread_emails(self) -> List[Email]:
         if self.folder:
