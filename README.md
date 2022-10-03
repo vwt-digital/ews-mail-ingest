@@ -3,7 +3,6 @@
 [![codecov](https://codecov.io/gh/vwt-digital/ews-mail-ingest/branch/develop/graph/badge.svg?token=IV91XUTN5S)](https://codecov.io/gh/vwt-digital/ews-mail-ingest)
 
 
-
 This function retrieves all un-read e-mails from an [Exchange Web Service (EWS)](https://docs.microsoft.com/en-us/exchange/client-developer/web-service-reference/ews-reference-for-exchange), stores these in a Google Cloud Storage bucket and then posts a message to a Pub/Sub topic. The Google Cloud Storage location for each e-mail will be defined by the e-mail's received timestamp, e.g. ```base/path/2019/11/01/20191101120000Z```
 
 The ```config.py``` file (see [config.example.py](config/config.example.py) for an example) defines which configuration will be used.

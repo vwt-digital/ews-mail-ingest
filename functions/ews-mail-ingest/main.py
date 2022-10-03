@@ -48,9 +48,16 @@ def handler(request):
     email_address = credentials["email"]
     password = get_secret(PROJECT_ID, credentials["secret_id"])
 
+    client_id = credentials["client_id"]
+    client_secret = get_secret(PROJECT_ID, credentials["client_secret_id"])
+    tenant_id = credentials["tenant_id"]
+
     email_service = EWSEmailService(
         email_address=email_address,
         password=password,
+        client_id=client_id,
+        client_secret=client_secret,
+        tenant_id=tenant_id,
         folder=credentials.get("folder", None),
         alias=credentials.get("alias", None),
     )

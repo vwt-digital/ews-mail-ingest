@@ -10,11 +10,12 @@ from datetime import datetime
 from typing import List, Any
 from uuid import uuid4
 
-from exchangelib import Credentials, Configuration, Account, FaultTolerance, Build, Version, FileAttachment, Message
+from exchangelib import Credentials, Configuration, Account, FaultTolerance, Build, Version, FileAttachment, Message, \
+    OAuth2Credentials, OAUTH2, BASIC, IMPERSONATION
 from exchangelib.folders import Messages
 
 # Suppress warnings from exchangelib
-logging.getLogger("exchangelib").setLevel(logging.ERROR)
+logging.getLogger("exchangelib").setLevel(logging.WARN)
 
 
 @dataclass
@@ -76,11 +77,21 @@ class EWSEmailService:
     exchange_client: Account
     folder: Messages
 
-    def __init__(self, email_address, password=None, folder=None, alias=None, *args, **kwargs):
+    def __init__(self,
+                 email_address,
+                 password=None,
+                 client_id=None,
+                 client_secret=None,
+                 tenant_id=None,
+                 folder=None,
+                 alias=None,
+                 *args,
+                 **kwargs
+                 ):
         self.email_address = email_address
         self.alias = alias
 
-        self.initialize_exchange_client(password)
+        self.initialize_exchange_client(password, client_id, client_secret, tenant_id)
 
         if folder is None:
             self.folder = self.exchange_client.inbox
@@ -89,13 +100,19 @@ class EWSEmailService:
 
     @retry(exceptions=(AutoDiscoverFailed, RateLimitError, ErrorServerBusy, ReadTimeoutError),
            tries=10, delay=30, logger=None)
-    def initialize_exchange_client(self, password=None):
-        acc_credentials = Credentials(username=self.email_address, password=password)
+    def initialize_exchange_client(self, password=None, client_id=None, client_secret=None, tenant_id=None):
+        if client_id is not None:
+            acc_credentials = OAuth2Credentials(client_id, client_secret, tenant_id)
+        else:
+            acc_credentials = Credentials(username=self.email_address, password=password)
+        credentials_type = OAUTH2 if client_id is not None else BASIC
+
         version = Version(build=Build(config.EXCHANGE_VERSION['major'], config.EXCHANGE_VERSION['minor']))
         acc_config = Configuration(service_endpoint=config.EXCHANGE_URL, credentials=acc_credentials,
-                                   auth_type='basic', version=version, retry_policy=FaultTolerance(max_wait=300))
+                                   auth_type=credentials_type, version=version,
+                                   retry_policy=FaultTolerance(max_wait=300))
         self.exchange_client = Account(primary_smtp_address=self.email_address, config=acc_config,
-                                       autodiscover=True, access_type='delegate')
+                                       credentials=acc_credentials, access_type=IMPERSONATION)
 
     def retrieve_unread_emails(self) -> List[Email]:
         if self.folder:
