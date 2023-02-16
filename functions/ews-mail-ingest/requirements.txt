@@ -56,4 +56,4 @@ tzdata==2021.1
 tzlocal==2.1
 urllib3==1.26.5
 webencodings==0.5.1
-Werkzeug==2.0.2
+Werkzeug==2.2.3
